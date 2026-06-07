@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全功能）
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0.83
+// @version      1.0.0.80
 // @description  质检核对：保修、延保、网络锁（仅非国行）、单卡强制、开卡槽、存储、颜色等（不含型号对比）
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
