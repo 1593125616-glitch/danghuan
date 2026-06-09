@@ -1,16 +1,634 @@
 // ==UserScript==
-// @name         质检选项核对横幅（鸭宝专版）
-// @namespace    http://tampermonkey.net/
-// @version      1.0.0
-// @description  质检核对：鸭宝专版 - 全品类通用核对脚本
+// @name         啞寶查詢自動生成報告 (延遲調整)
+// @namespace    https://www.ybcheck.com/
+// @version      0.42
+// @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
-// @match        https://yihuan.oppoer.me/*
+// @match        https://www.ybcheck.com/*
+// @match        https://support.oppo.com/*
+// @match        https://support.vivo.com.cn/*
 // @grant        none
-// @updateURL    https://raw.gitcode.com/py1998/shajing/raw/main/yabao.user.js
-// @downloadURL  https://raw.gitcode.com/py1998/shajing/raw/main/yabao.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js
 // ==/UserScript==
 
 (function() {
     'use strict';
 
+    // ==================== 凌晨3点强刷 ====================
+    const REFRESH_HOUR = 3;
+    const STORAGE_KEY = 'qc_auto_refresh_date';
+    function getTodayStr() {
+        const now = new Date();
+        return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    }
+    function shouldRefreshNow() {
+        const now = new Date();
+        const hours = now.getHours();
+        const today = getTodayStr();
+        if (hours < REFRESH_HOUR) return false;
+        if (localStorage.getItem(STORAGE_KEY) === today) return false;
+        return true;
+    }
+    function executeRefresh() {
+        if (!shouldRefreshNow()) return;
+        const now = new Date();
+        const today = getTodayStr();
+        localStorage.setItem(STORAGE_KEY, today);
+        console.log(`[啞寶腳本] 凌晨${now.getHours()}:${now.getMinutes()} 触发强刷`);
+        location.reload(true);
+    }
+    setInterval(executeRefresh, 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') executeRefresh();
+    });
+    executeRefresh();
+
+    // ==================== 通用工具 ====================
+    const DEBUG = true;
+    function log(...args) { if (DEBUG) console.log('[啞寶腳本]', ...args); }
+
+    function findButtonByText(textList, container = document.body) {
+        if (!Array.isArray(textList)) textList = [textList];
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT, {
+            acceptNode: node => {
+                const tag = node.tagName.toLowerCase();
+                if (['div', 'button', 'a', 'span', 'img', 'input'].includes(tag)) {
+                    const txt = node.textContent || '';
+                    for (let t of textList) if (txt.includes(t)) return NodeFilter.FILTER_ACCEPT;
+                }
+                return NodeFilter.FILTER_SKIP;
+            }
+        });
+        return walker.nextNode();
+    }
+
+    function findCopyLink() {
+        const links = document.querySelectorAll('a.confirm-btn.primary');
+        for (let link of links) {
+            const text = link.textContent.trim();
+            if (text.includes('点此复制报告文字并关闭对话框') || text.includes('點此復制報告文字並關閉對話框')) {
+                return link;
+            }
+        }
+        return null;
+    }
+
+    function isInModal(el) {
+        return el && el.closest('.confirm-ft') !== null;
+    }
+
+    function simpleClick(el) {
+        if (!el) return;
+        const onclick = el.getAttribute('onclick');
+        if (onclick && onclick !== 'javascript:;' && onclick !== 'javascript:void(0);') {
+            try {
+                new Function('event', onclick).call(el, null);
+                log('已執行 onclick');
+                return;
+            } catch (e) { log('onclick 執行失敗:', e.message); }
+        }
+        el.click();
+        log('已原生點擊');
+    }
+
+    function isModalContentReady() {
+        const saveBox = document.querySelector('.confirm-bd .saveBox');
+        if (!saveBox) return false;
+        const text = saveBox.innerText.trim();
+        return text.length > 50 && text.includes('查询时间');
+    }
+
+    const host = location.hostname;
+
+    // ==================== ybcheck.com ====================
+    if (host.includes('ybcheck.com')) {
+        (function() {
+            const MAX_WAIT = 180000;
+            const COPY_BTN_DELAY = 500;   // 修改为500ms
+            const MAX_COPY_WAIT = 15000;
+            const GEN_CHECK_INTERVAL = 500;
+            const MAX_GEN_ATTEMPTS = Math.ceil(MAX_WAIT / GEN_CHECK_INTERVAL);
+
+            let state = {
+                processing: false,
+                querySerial: 0,
+                currentIMEI: '',
+                timers: [],
+                observers: []
+            };
+
+            function clearAll() {
+                state.timers.forEach(clearInterval);
+                state.timers = [];
+                state.observers.forEach(obs => obs.disconnect());
+                state.observers = [];
+                state.processing = false;
+                state.currentIMEI = '';
+            }
+
+            function addTimer(id) { state.timers.push(id); }
+            function addObserver(obs) { state.observers.push(obs); }
+
+            function getResultAreaText() {
+                const resultArea = document.getElementById('result') || document.getElementById('J_List');
+                return resultArea ? resultArea.innerText : '';
+            }
+
+            function resultContainsIMEI() {
+                if (!state.currentIMEI) return false;
+                const text = getResultAreaText();
+                return text.includes(state.currentIMEI);
+            }
+
+            function handleCopyButton(serial) {
+                if (state.querySerial !== serial) return;
+                if (!isModalContentReady()) {
+                    log('彈窗內容尚未渲染完成，等待中...');
+                    return;
+                }
+                const copyBtn = findCopyLink();
+                if (copyBtn) {
+                    log('內容已就緒，點擊複製按鈕');
+                    simpleClick(copyBtn);
+                    log('流程結束');
+                    clearAll();
+                } else {
+                    log('未找到複製按鈕');
+                }
+            }
+
+            function startWatchingForCopy(serial) {
+                log('開始監聽複製按鈕...');
+                setTimeout(() => {
+                    if (state.querySerial !== serial) return;
+
+                    handleCopyButton(serial);
+
+                    const observer = new MutationObserver(() => {
+                        if (state.querySerial === serial) handleCopyButton(serial);
+                    });
+                    observer.observe(document.body, { childList: true, subtree: true });
+                    addObserver(observer);
+
+                    const interval = setInterval(() => {
+                        if (state.querySerial !== serial) { clearInterval(interval); return; }
+                        handleCopyButton(serial);
+                    }, 500);
+                    addTimer(interval);
+
+                    const timeout = setTimeout(() => {
+                        log('等待複製按鈕超時');
+                        clearAll();
+                    }, MAX_COPY_WAIT);
+                    addTimer(timeout);
+                }, COPY_BTN_DELAY);
+            }
+
+            function afterGenClick(serial, modalAlready) {
+                if (state.querySerial !== serial) return;
+                if (modalAlready) {
+                    startWatchingForCopy(serial);
+                    return;
+                }
+                const observer = new MutationObserver(() => {
+                    const modal = document.querySelector('.confirm-ft');
+                    if (modal && modal.offsetParent !== null) {
+                        observer.disconnect();
+                        startWatchingForCopy(serial);
+                    }
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+                addObserver(observer);
+
+                const interval = setInterval(() => {
+                    const modal = document.querySelector('.confirm-ft');
+                    if (modal && modal.offsetParent !== null) {
+                        clearInterval(interval);
+                        observer.disconnect();
+                        startWatchingForCopy(serial);
+                    }
+                }, 300);
+                addTimer(interval);
+
+                const timeout = setTimeout(() => {
+                    log('等待彈窗超時');
+                    clearAll();
+                }, 30000);
+                addTimer(timeout);
+            }
+
+            function tryClickGen(serial) {
+                if (state.querySerial !== serial) return false;
+                const genBtn = document.getElementById('initText') || findButtonByText('生成文字');
+                if (!genBtn || genBtn.offsetParent === null) return false;
+
+                const inModal = isInModal(genBtn);
+                if (!inModal && !resultContainsIMEI()) {
+                    log('結果尚未包含當前IMEI，跳過點擊（右側模式）');
+                    return false;
+                }
+
+                log('✅ 準備點擊生成文字按鈕 (模式: ' + (inModal ? '彈窗' : '右側') + ')');
+                if (!inModal) {
+                    log('按鈕在頁面中，滾動至可見');
+                    genBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        if (state.querySerial !== serial) return;
+                        simpleClick(genBtn);
+                        afterGenClick(serial, false);
+                    }, 400);
+                } else {
+                    log('按鈕在彈窗內，直接點擊');
+                    simpleClick(genBtn);
+                    afterGenClick(serial, true);
+                }
+                return true;
+            }
+
+            function waitForResult(serial) {
+                const resultArea = document.getElementById('result') || document.getElementById('J_List') || document.body;
+                const observer = new MutationObserver(() => {
+                    if (tryClickGen(serial)) observer.disconnect();
+                });
+                observer.observe(resultArea, { childList: true, subtree: true });
+                addObserver(observer);
+
+                let attempts = 0;
+                const interval = setInterval(() => {
+                    if (state.querySerial !== serial) { clearInterval(interval); return; }
+                    if (tryClickGen(serial)) clearInterval(interval);
+                    else if (++attempts > MAX_GEN_ATTEMPTS) {
+                        clearInterval(interval);
+                        log(`未能在 ${MAX_WAIT/1000} 秒內找到生成文字按鈕`);
+                        clearAll();
+                    }
+                }, GEN_CHECK_INTERVAL);
+                addTimer(interval);
+
+                const timeout = setTimeout(() => {
+                    log('結果加載超時');
+                    clearAll();
+                }, MAX_WAIT);
+                addTimer(timeout);
+            }
+
+            function onQueryClick() {
+                clearAll();
+                state.processing = true;
+                state.querySerial++;
+
+                const input = document.getElementById('search');
+                state.currentIMEI = input ? input.value.trim() : '';
+                const serial = state.querySerial;
+                log(`查詢按鈕點擊，序號 ${serial}，IMEI: ${state.currentIMEI}`);
+
+                let midAttempts = 0;
+                const midInterval = setInterval(() => {
+                    const confirmTexts = ['确定', '確定', '是', '查询', '提交', 'OK'];
+                    for (let t of confirmTexts) {
+                        const btn = findButtonByText(t);
+                        if (btn) { simpleClick(btn); break; }
+                    }
+                    if (++midAttempts > 20) clearInterval(midInterval);
+                }, 300);
+                addTimer(midInterval);
+
+                waitForResult(serial);
+            }
+
+            function bindSearchButton() {
+                const btn = document.getElementById('btn-search');
+                if (btn) {
+                    btn.addEventListener('click', onQueryClick);
+                    log('查詢按鈕綁定成功');
+                    return true;
+                }
+                return false;
+            }
+
+            function init() {
+                if (!bindSearchButton()) {
+                    new MutationObserver(() => { if (bindSearchButton()) observer.disconnect(); }).observe(document.body, { childList: true, subtree: true });
+                    log('等待查詢按鈕出現...');
+                }
+            }
+
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+            else init();
+        })();
+    }
+
+    // ==================== OPPO 格式化複製 ====================
+    else if (host.includes('support.oppo.com')) {
+        (function() {
+            log('OPPO 格式化提取已啟動');
+            let lastCopied = '';
+
+            function copyText(text) {
+                if (!text) return;
+                navigator.clipboard.writeText(text).then(() => log('✅ 已複製')).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                });
+            }
+
+            function findResultCard() {
+                const allElements = document.querySelectorAll('*');
+                let queryTitle = null;
+                for (const el of allElements) {
+                    if (el.textContent.trim() === '查询结果' && el.children.length === 0) {
+                        queryTitle = el;
+                        break;
+                    }
+                }
+                if (!queryTitle) return null;
+                let container = queryTitle.parentElement;
+                while (container) {
+                    const text = container.innerText;
+                    if (text.includes('IMEI/SN') && text.includes('激活时间')) return container;
+                    container = container.parentElement;
+                }
+                return null;
+            }
+
+            function extractCleanResult(container) {
+                if (!container) return '';
+                const fullText = container.innerText;
+                const startIdx = fullText.indexOf('查询结果');
+                const endIdx = fullText.indexOf('温馨提示');
+                if (startIdx === -1) return '';
+                let result = (endIdx !== -1 && endIdx > startIdx) ?
+                    fullText.substring(startIdx, endIdx).trim() : fullText.substring(startIdx).trim();
+                const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                const filterWords = ['颜色仅供参考', '重新查询', '温馨提示'];
+                const cleanLines = lines.filter(l => !filterWords.some(w => l.includes(w)));
+                const mergeLabels = ['IMEI/SN', '颜色', '激活时间'];
+                const merged = [];
+                for (let i = 0; i < cleanLines.length; i++) {
+                    let cur = cleanLines[i];
+                    let label = cur.replace(/[：:]\s*$/, '');
+                    if (mergeLabels.includes(label) && i + 1 < cleanLines.length) {
+                        const next = cleanLines[i + 1];
+                        if (!['查询结果', ...mergeLabels].includes(next) && !next.startsWith('(')) {
+                            merged.push(`${label}:${next}`);
+                            i++;
+                            continue;
+                        }
+                    }
+                    merged.push(cur);
+                }
+                const finalLines = [];
+                for (let i = 0; i < merged.length; i++) {
+                    const line = merged[i];
+                    if (line === '查询结果') { finalLines.push(line); continue; }
+                    const clean = line.replace(/[：:]\s*$/, '');
+                    if (!line.includes(':') && i + 1 < merged.length && merged[i + 1].startsWith('(')) {
+                        finalLines.push('型号:' + clean);
+                        finalLines.push('容量:' + merged[i + 1]);
+                        i++;
+                        continue;
+                    }
+                    finalLines.push(line);
+                }
+                return finalLines.join('\n');
+            }
+
+            function tryExtractAndCopy() {
+                const card = findResultCard();
+                if (!card) return false;
+                const resultText = extractCleanResult(card);
+                if (resultText && resultText !== lastCopied) {
+                    lastCopied = resultText;
+                    copyText(resultText);
+                    log('已複製 OPPO 結果');
+                    return true;
+                }
+                return false;
+            }
+
+            document.addEventListener('click', function(e) {
+                const target = e.target.closest('button, a, span, div');
+                if (target && target.textContent.includes('查询')) {
+                    log('重置複製狀態');
+                    lastCopied = '';
+                }
+            }, true);
+
+            let attempts = 0;
+            const interval = setInterval(() => {
+                if (tryExtractAndCopy() || ++attempts >= 30) clearInterval(interval);
+            }, 1000);
+            const observer = new MutationObserver(tryExtractAndCopy);
+            observer.observe(document.body, { childList: true, subtree: true });
+        })();
+    }
+
+    // ==================== VIVO 格式化提取複製 ====================
+    else if (host.includes('support.vivo.com.cn')) {
+        (function() {
+            log('VIVO 格式化提取已啟動');
+            let lastCopied = '';
+
+            function copyText(text) {
+                if (!text) return;
+                navigator.clipboard.writeText(text).then(() => log('✅ 已複製')).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                });
+            }
+
+            /**
+             * 查找结果卡片容器
+             * 尋找包含「查询结果」文字的元素，再往上找包含 IMEI 相关内容的容器
+             */
+            function findResultCard() {
+                const allElements = document.querySelectorAll('*');
+                let queryTitle = null;
+                for (const el of allElements) {
+                    if (el.textContent.trim() === '查询结果' && el.children.length === 0) {
+                        queryTitle = el;
+                        break;
+                    }
+                }
+                if (!queryTitle) return null;
+                let container = queryTitle.parentElement;
+                while (container) {
+                    const text = container.innerText;
+                    if (text.includes('IMEI码') && (text.includes('激活日期') || text.includes('SN码'))) return container;
+                    container = container.parentElement;
+                }
+                return null;
+            }
+
+            /**
+             * 从「您的机型：Y300 12G+512G」中分离机型与容量
+             * 容量格式为 xxG+xxxG（如 12G+512G）或 xxG+xxxGB
+             */
+            function parseModelCapacity(text) {
+                // 匹配末尾容量格式：数字G+数字G 或 数字G+数字GB
+                const capMatch = text.match(/\s+(\d+G\+\d+GB?)\s*$/);
+                if (capMatch) {
+                    const model = text.substring(0, capMatch.index).trim();
+                    return { model, capacity: capMatch[1] };
+                }
+                // 兼容纯 G 结尾（如 256G）
+                const capMatch2 = text.match(/\s+(\d+G)\s*$/);
+                if (capMatch2) {
+                    const model = text.substring(0, capMatch2.index).trim();
+                    return { model, capacity: capMatch2[1] };
+                }
+                return { model: text, capacity: '' };
+            }
+
+            /**
+             * 提取并格式化查询结果
+             * 原始格式：
+             *   查询结果
+             *   产品信息
+             *   机型图片仅供参考
+             *   您的机型：Y300 12G+512G
+             *   机型颜色：青松
+             *   IMEI码：861114076902532
+             *   SN码：10AG5D2A61009DK
+             *   激活日期：
+             *   2024年12月27日
+             *   保修期至：
+             *   2025年12月27日
+             *
+             * 目标格式：
+             *   查询结果
+             *   机型：Y300
+             *   容量: 12G+512G
+             *   颜色：青松
+             *   IMEI码：861114076902532
+             *   SN码：10AG5D2A61009DK
+             *   激活日期：2024年12月27日
+             *   保修期至：2025年12月27日
+             */
+            function extractCleanResult(container) {
+                if (!container) return '';
+                const fullText = container.innerText;
+
+                // 定位起始位置
+                const startIdx = fullText.indexOf('查询结果');
+                if (startIdx === -1) return '';
+
+                // 定位结束位置（排除底部无关文字）
+                const endKeywords = [
+                    '温馨提示', '以上信息仅供参考', '本查询结果仅供参考',
+                    '消费者可凭有效发票', '保障服务状态', '＊查询提示',
+                    '了解产品', '在线购买', '服务支持', '关于vivo',
+                    '在线客服', 'Select Location', '©'
+                ];
+                let endIdx = fullText.length;
+                for (const kw of endKeywords) {
+                    const idx = fullText.indexOf(kw, startIdx);
+                    if (idx !== -1 && idx < endIdx) endIdx = idx;
+                }
+
+                let result = fullText.substring(startIdx, endIdx).trim();
+                const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+                // 跳过无关行
+                const skipWords = ['产品信息', '机型图片仅供参考'];
+                const cleanLines = lines.filter(l => !skipWords.some(w => l.includes(w)));
+
+                // 逐行处理转换
+                const output = [];
+                for (let i = 0; i < cleanLines.length; i++) {
+                    const line = cleanLines[i];
+
+                    // 保留「查询结果」标题
+                    if (line === '查询结果') {
+                        output.push(line);
+                        continue;
+                    }
+
+                    // 处理「您的机型：Y300 12G+512G」→ 机型 + 容量
+                    if (line.startsWith('您的机型')) {
+                        const colonIdx = line.indexOf('：');
+                        const rest = colonIdx !== -1 ? line.substring(colonIdx + 1).trim() : line.replace('您的机型', '').trim();
+                        const { model, capacity } = parseModelCapacity(rest);
+                        if (model) output.push(`机型：${model}`);
+                        if (capacity) output.push(`容量: ${capacity}`);
+                        continue;
+                    }
+
+                    // 处理「机型颜色：青松」→ 「颜色：青松」
+                    if (line.startsWith('机型颜色')) {
+                        output.push(line.replace('机型颜色', '颜色'));
+                        continue;
+                    }
+
+                    // 处理标签与值分行的情况（激活日期：\n2024年12月27日）
+                    // 如果当前行以 ：或 : 结尾，且下一行存在且不含冒号，则合并
+                    if (/[：:]\s*$/.test(line) && i + 1 < cleanLines.length) {
+                        const nextLine = cleanLines[i + 1];
+                        // 下一行不含冒号且不是纯数字（如日期格式）
+                        if (!nextLine.includes('：') && !nextLine.includes(':') && !/^\d+$/.test(nextLine)) {
+                            output.push(`${line}${nextLine}`);
+                            i++; // 跳过已合并的下一行
+                            continue;
+                        }
+                    }
+
+                    output.push(line);
+                }
+
+                // 安全截断：只在「保修期至」行结束，后面统统不要
+                const warrantyIdx = output.findIndex(l => l.startsWith('保修期至'));
+                if (warrantyIdx !== -1 && warrantyIdx < output.length - 1) {
+                    return output.slice(0, warrantyIdx + 1).join('\n');
+                }
+
+                return output.join('\n');
+            }
+
+            function tryExtractAndCopy() {
+                const card = findResultCard();
+                if (!card) return false;
+                const resultText = extractCleanResult(card);
+                if (resultText && resultText !== lastCopied) {
+                    lastCopied = resultText;
+                    copyText(resultText);
+                    log('已複製 VIVO 結果');
+                    log('內容:\n' + resultText);
+                    return true;
+                }
+                return false;
+            }
+
+            // 點擊「查询」按钮时重置复制状态
+            document.addEventListener('click', function(e) {
+                const target = e.target.closest('button, a, span, div');
+                if (target && (target.textContent.includes('查询') || target.textContent.includes('立即查询'))) {
+                    log('重置複製狀態');
+                    lastCopied = '';
+                }
+            }, true);
+
+            // 定期轮询 + MutationObserver 双重检测
+            let attempts = 0;
+            const interval = setInterval(() => {
+                if (tryExtractAndCopy() || ++attempts >= 60) clearInterval(interval);
+            }, 1000);
+            const observer = new MutationObserver(tryExtractAndCopy);
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            log('VIVO 監聽器已啟動');
+        })();
+    }
 })();
