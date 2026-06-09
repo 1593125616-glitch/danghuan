@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.1
+// @version      1.7.4
 // @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果"是否国行"为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测，华为/OPPO平板关键词匹配)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击"开始检测"或"提交"清空旧数据，按钮加大，全品类通用，凌晨3点强刷
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -387,6 +387,13 @@
                         }
 
                         if (expected) {
+                            // Apple Watch: 非国行 → 非大陆国行
+                            if (/苹果|Apple/i.test(brand)) {
+                                const watchCategory = getInputValueByLabel('品类');
+                                if (watchCategory === '智能手表' || watchCategory === '手表') {
+                                    if (expected === '非国行') expected = '非大陆国行';
+                                }
+                            }
                             let match = false;
                             if (Array.isArray(expected)) {
                                 match = expected.includes(selectedVal);
@@ -877,6 +884,29 @@
                     if (!selected || /不检测|跳过/i.test(selected)) return null;
                     if (selected !== 'ID/账户锁无法解除') {
                         return `账号 应为【ID/账户锁无法解除】（激活锁已开启），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '连接',
+                labelKeywords: ['连接', '连接项'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    const category = getInputValueByLabel('品类');
+                    if (!/苹果|Apple/i.test(brand) || category !== '智能手表') return null;
+                    const text = officialText + ' ' + (document.body.textContent || '');
+                    let expected = '';
+                    if (/GPS\s*\+\s*移动网络/.test(text)) {
+                        expected = 'GPS+蜂窝网络';
+                    } else if (/\bGPS\b/.test(text)) {
+                        expected = 'GPS';
+                    }
+                    if (!expected) return null;
+                    const selected = getSelectedValue(['连接', '连接项']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `连接 应为【${expected}】，你选了【${selected}】`;
                     }
                     return null;
                 },

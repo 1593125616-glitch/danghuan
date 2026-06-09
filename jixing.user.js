@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.1.8
+// @version      1.2.2
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -197,8 +197,38 @@
         'matepad mini 悦读版 8.8英寸 柔光版': '华为 MatePad Mini 悦读版（柔光版）',
     };
 
+    // ========== Apple Watch 映射表 ==========
+    const appleWatchModelMapping = {
+        'watch sport 第1代': 'Apple Watch Series 1',
+        'watch 第1代': 'Apple Watch Series 1',
+        'watch series 2': 'Apple Watch Series 2',
+        'watch series 2 nike': 'Apple Watch Nike+（Series 2）',
+        'watch series 3 nike': 'Apple Watch Nike+（Series 3）',
+        'watch series 4 nike': 'Apple Watch Nike+（Series 4）',
+        'watch series 5 nike': 'Apple Watch Nike（Series 5）',
+        'watch series 6 nike': 'Apple Watch Nike（Series 6）',
+        'watch series 7 nike': 'Apple Watch Nike（Series 7）',
+        'watch se nike': 'Apple Watch Nike SE',
+        'watch se 第2代': 'Apple Watch SE 2',
+        'watch se 第3代': 'Apple Watch SE 3',
+    };
+
     function isStrictProductDescBrand(brand) {
         return /OPPO|一加|真我|realme/i.test(brand);
+    }
+
+    function cleanAppleWatchModel(str) {
+        let hasNike = /Nike/i.test(str);
+        let cleaned = str
+            .replace(/[（(]\s*GPS\b.*$/gi, '')
+            .replace(/\bGPS\b.*$/gi, '')
+            .replace(/[（(]\s*(?:Alum|SS)\s*[）)]/gi, '')
+            .replace(/[（(]\s*移动网络\s*[）)]/gi, '')
+            .replace(/\s+/g, ' ').trim();
+        if (hasNike && !/Nike/i.test(cleaned)) {
+            cleaned += ' Nike';
+        }
+        return cleaned;
     }
 
     // ========== 页面选中颜色/存储获取 ==========
@@ -264,7 +294,7 @@
         cleaned = cleaned.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
         cleaned = cleaned.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
         if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
-            cleaned = cleaned.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
+            cleaned = cleanAppleWatchModel(cleaned);
         }
         return cleaned.replace(/\s+/g, ' ').trim();
     }
@@ -356,7 +386,7 @@
                             raw = forceTruncateAtKeywords(raw);
                             raw = cleanModelString(raw);
                             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
-                                raw = raw.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
+                                raw = cleanAppleWatchModel(raw);
                             }
                             raw = removeColorAndStorage(raw, color, storage);
                             if (!color || !storage) {
@@ -373,7 +403,7 @@
                         }
                         officialModelClean = extractOfficialModel(officialText, brand, category);
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
-                            officialModelClean = officialModelClean.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
+                            officialModelClean = cleanAppleWatchModel(officialModelClean);
                         }
                     }
 
@@ -444,6 +474,16 @@
                                 }
                                 break;
                             }
+                        }
+                    }
+
+                    // ========== Apple Watch 硬性型号映射 ==========
+                    if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const mapped = appleWatchModelMapping[key];
+                        if (mapped) {
+                            if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
                         }
                     }
 
@@ -612,7 +652,7 @@
             raw = forceTruncateAtKeywords(raw);
             raw = cleanModelString(raw);
             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
-                raw = raw.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
+                raw = cleanAppleWatchModel(raw);
             }
             return raw || null;
         }
