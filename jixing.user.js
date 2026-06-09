@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.1.6
+// @version      1.1.7
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -601,8 +601,8 @@
     }
 
     function extractOfficialModel(text, brand, category) {
-        let modelMatch = text.match(/^:?型号[：:]\s*(.+)$/im);
-        if (!modelMatch) modelMatch = text.match(/^机型[：:]\s*(.+)$/im);
+        let modelMatch = text.match(/^机型[：:]\s*(.+)$/im);
+        if (!modelMatch) modelMatch = text.match(/^:?型号[：:]\s*(.+)$/im);
         if (modelMatch && modelMatch[1].trim()) {
             let raw = modelMatch[1].trim();
             raw = forceTruncateAtKeywords(raw);
