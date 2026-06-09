@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.0.8.8
-// @description  质检核对：独立去除 /WCDMA、64MB+、32MB+、8MB+ 等后缀
+// @version      1.1.6
+// @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @grant        none
-// @updateURL    https://raw.gitcode.com/py1998/shajing/raw/main/jixing.user.js
-// @downloadURL  https://raw.gitcode.com/py1998/shajing/raw/main/jixing.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
 // ==/UserScript==
 
 (function() {
@@ -151,6 +151,52 @@
         'ipad pro, 12.9寸 (第5代)': 'iPad Pro 12.9英寸 5代 2021款',
     };
 
+    // ========== 华为平板映射表 ==========
+    const huaweiPadModelMapping = {
+        'matepad 10.4英寸 2020款': '华为 MatePad 10.4英寸',
+        'matepad 10.4英寸 2021款': '华为 MatePad 10.4英寸',
+        'matepad 5g 10.4英寸 2020款 5g版': '华为 MatePad 10.4英寸（5G版）',
+        'matepad 10.8吋': '华为 MatePad 10.8英寸',
+        'matepad 10.8英寸 2020款': '华为 MatePad 10.8英寸',
+        'matepad 11.0英寸 2023款': '华为 MatePad 11英寸 2023',
+        'matepad 11.0英寸 2023款 柔光版': '华为 MatePad 11英寸 2023（柔光版）',
+        'matepad 11.5"s 灵动款': '华为 MatePad 11.5S 2024款（灵动版）',
+        'matepad 11.5 s 2025款 灵动款': '华为 MatePad 11.5S 2025款（灵动版）',
+        'matepad 11.5英寸 柔光版': '华为 MatePad 11.5英寸 2023（柔光版）',
+        'matepad 11.5 2024款 柔光版': '华为 MatePad 11.5英寸 2024（柔光版）',
+        'matepad 11.5英寸': '华为 MatePad 11.5英寸 2023',
+        'matepad 11.5 2024款': '华为 MatePad 11.5英寸 2024',
+        'matepad 11.5 2025款': '华为 MatePad 11.5英寸 2025',
+        'matepad 11.5"s 柔光版': '华为 MatePad 11.5S 2024款（柔光版）',
+        'matepad 11.5"s': '华为 MatePad 11.5S 2024款（标准版）',
+        'matepad 11.5"s 2025款': '华为 MatePad 11.5S 2025款（标准版）',
+        'matepad air 11.5英寸 2023款': '华为 MatePad Air 11.5英寸',
+        'matepad air 11.5英寸 2023款 柔光版': '华为 MatePad Air 11.5英寸（柔光版）',
+        'matepad air 12英寸 2024款': '华为 MatePad Air 12英寸 2024款',
+        'matepad air 12英寸 2024款 柔光版': '华为 MatePad Air 12英寸 2024款（柔光版）',
+        'matepad air 12英寸 2025款': '华为 MatePad Air 12英寸 2025款',
+        'matepad air 12英寸 2025款 柔光版': '华为 MatePad Air 12英寸 2025款（柔光版）',
+        'matepad pro 10.8英寸 2019款': '华为 MatePad Pro 10.8英寸 2019款',
+        'matepad pro 10.8英寸 2021款': '华为 MatePad Pro 10.8英寸 2021款',
+        'matepad pro 10.8英寸 2020款': '华为 MatePad Pro 10.8英寸 2020款',
+        'matepad pro 11英寸 2022款 性能版': '华为 MatePad Pro 11英寸 2022款 性能版',
+        'matepad pro 11英寸 2022款': '华为 MatePad Pro 11英寸 2022款',
+        'matepad pro 11英寸 2024款': '华为 MatePad Pro 11英寸 2024款',
+        'matepad pro 12.2英寸 2024款': '华为 MatePad Pro 12.2英寸 2024款',
+        'matepad pro 12.2英寸 2024款 柔光版': '华为 MatePad Pro 12.2英寸 2024款 柔光版',
+        'matepad pro 12.2英寸 2025款': '华为 MatePad Pro 12.2英寸 2025款',
+        'matepad pro 12.6英寸 2021款': '华为 MatePad Pro 12.6英寸 2021款',
+        'matepad pro 12.6英寸 2022款': '华为 MatePad Pro 12.6英寸 2022款',
+        'matepad pro 13.2英寸 2023款': '华为 MatePad Pro 13.2英寸 2023款',
+        'matepad pro 13.2英寸 2025款 柔光版': '华为 MatePad Pro 13.2英寸 2025款（柔光版）',
+        'matepad pro 13.2英寸 2025款': '华为 MatePad Pro 13.2英寸 2025款',
+        'matepad pro 13.2英寸 2025款 典藏版': '华为 MatePad Pro 13.2英寸 典藏版',
+        'matepad mini 8.8英寸 柔光版': '华为 MatePad Mini（柔光版）',
+        'matepad mini 8.8英寸': '华为 MatePad Mini',
+        'matepad mini 悦读版 8.8英寸': '华为 MatePad Mini 悦读版',
+        'matepad mini 悦读版 8.8英寸 柔光版': '华为 MatePad Mini 悦读版（柔光版）',
+    };
+
     function isStrictProductDescBrand(brand) {
         return /OPPO|一加|真我|realme/i.test(brand);
     }
@@ -208,11 +254,15 @@
         if (!val) return '';
         let cleaned = val;
         cleaned = cleaned.replace(/触控笔/gi, '');
-        cleaned = cleaned.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版/gi, ' ');
+        cleaned = cleaned.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
         cleaned = cleaned.replace(/全网通/gi, '');
         cleaned = cleaned.replace(/[（(]\s*[54]G\s*[）)]/gi, ' ');
         cleaned = cleaned.replace(/\b[54]G\b/gi, ' ');
-        cleaned = cleaned.replace(/细闪|素皮|无充电器版|广东|AI 版|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
+        // 去除 AI版（含空格或不含空格）
+        cleaned = cleaned.replace(/AI\s*版/gi, ' ');
+        // 去除 WiFi版 / WIFI版 / Wi-Fi版（含空格或不含空格）
+        cleaned = cleaned.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        cleaned = cleaned.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
         if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
             cleaned = cleaned.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
         }
@@ -243,6 +293,37 @@
                   .replace(/[（]/g, '(')
                   .replace(/[）]/g, ')')
                   .toLowerCase();
+    }
+
+    // ========== 华为平板：从产品描述提取型号 ==========
+    function extractHuaweiPadFromDesc(officialText) {
+        const descLine = extractInfoLine(officialText, '产品描述') || extractInfoLine(officialText, 'Product Description') || '';
+        if (!descLine) return null;
+
+        let extracted = descLine;
+
+        // 去除颜色和存储（从表单中获取）
+        const color = getSelectedColor();
+        const storage = getSelectedStorage();
+        extracted = removeColorAndStorage(extracted, color, storage);
+
+        // 如果表单中没获取到颜色/存储，尝试从官方文本中提取
+        if (!color || !storage) {
+            const cs = extractColorAndStorage(officialText);
+            if (!color && cs.color) extracted = removeColorAndStorage(extracted, cs.color, '');
+            if (!storage && cs.storage) extracted = removeColorAndStorage(extracted, '', cs.storage);
+        }
+
+        // 去除 WiFi版 / LTE版 / 演示样机
+        extracted = extracted.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        extracted = extracted.replace(/LTE版/gi, ' ');
+        extracted = extracted.replace(/演示样机/gi, ' ');
+
+        // 使用现有清洁函数
+        extracted = cleanModelString(extracted);
+        extracted = extracted.replace(/\s+/g, ' ').trim();
+
+        return extracted || null;
     }
 
     // ========== 辅助：从文本中提取字段 ==========
@@ -294,7 +375,49 @@
 
                     if (!officialModelClean) return null;
 
-                    // ========== 华为特殊规则 ==========
+                    // ========== 华为耳机特殊规则 ==========
+                    if (brand === '华为' && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
+                        if (/freebuds\s*4e/i.test(officialText)) {
+                            const expected = '华为FreeBuds4E2024款';
+                            const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                            const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                            if (userNorm !== expectedNorm) {
+                                return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                            }
+                            return null;
+                        }
+                    }
+
+                    // ========== 华为平板特殊规则（优先使用产品描述 + 映射表） ==========
+                    if (brand === '华为' && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        // 尝试从产品描述提取型号
+                        const descModel = extractHuaweiPadFromDesc(officialText);
+                        if (descModel) {
+                            const key = descModel.toLowerCase().replace(/\s+/g, ' ');
+                            let expected = huaweiPadModelMapping[key];
+
+                            // 未命中映射时尝试去掉"款"再查
+                            if (!expected) {
+                                const keyNoSuffix = key.replace(/款/g, '').trim();
+                                expected = huaweiPadModelMapping[keyNoSuffix];
+                            }
+
+                            if (!expected) {
+                                // 不在映射表内，走通用规则：产品描述提取值 + 华为前缀
+                                expected = `华为 ${descModel}`;
+                            }
+
+                            const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                            const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                            if (userNorm !== expectedNorm) {
+                                return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                            }
+                            return null;
+                        }
+                        // 如果没有产品描述字段，继续走下面的通用规则
+                    }
+
+                    // ========== 华为特殊规则（手机版） ==========
                     if (brand === '华为' && officialModelClean) {
                         const huaweiSpecialModels = [
                             { pattern: /\bmate\s*30\b(?!\s*pro)/i, type: 'versioned' },
@@ -341,6 +464,10 @@
                         const normalizeRealme = (s) => s.toLowerCase().replace(/真我|realme/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
                         if (normalizeRealme(officialModelClean) === normalizeRealme(selectedVal)) return null;
                     }
+                    if (/一加|oneplus/i.test(brand)) {
+                        const normalizeOneplus = (s) => s.toLowerCase().replace(/一加|oneplus/gi, '').replace(/\s+/g, '');
+                        if (normalizeOneplus(officialModelClean) === normalizeOneplus(selectedVal)) return null;
+                    }
                     if (/小米|Xiaomi|Redmi/i.test(brand) && category === '手机') {
                         const normalizeXiaomi = (s) => s.toLowerCase().replace(/小米|xiaomi|红米|redmi/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
                         if (normalizeXiaomi(officialModelClean) === normalizeXiaomi(selectedVal)) return null;
@@ -373,7 +500,7 @@
                 }
             },
         ],
-        bannerStyle: `position:fixed; top:10px; left:10px; z-index:99998; background:#d93025; color:#fff; padding:6px 12px; font-size:13px; font-weight:bold; text-align:left; border-radius:4px; box-shadow:0 2px 12px rgba(0,0,0,0.35); max-width:380px;`,
+        bannerStyle: `position:fixed; top:45px; left:10px; z-index:100000; background:#d93025; color:#fff; padding:6px 12px; font-size:13px; font-weight:bold; text-align:left; border-radius:4px; box-shadow:0 2px 12px rgba(0,0,0,0.35); max-width:380px;`,
         minOfficialLength: 30, maxRetries: 20, retryInterval: 500, bannerDuration: 120000,
     };
 
@@ -421,13 +548,20 @@
     function cleanModelString(raw) {
         if (!raw) return '';
         const original = raw;
-        // 独立去除 /WCDMA、64MB+、32MB+、8MB+（不删除其后内容）
+        // 去除 /WCDMA、64MB+、32MB+、8MB+
         raw = raw.replace(/\/WCDMA/gi, ' ');
         raw = raw.replace(/64MB\+/gi, ' ');
         raw = raw.replace(/32MB\+/gi, ' ');
         raw = raw.replace(/8MB\+/gi, ' ');
         raw = raw.replace(/\b(VIN|OBS|CELL),?\s*/gi, ' ');
-        raw = raw.replace(/Wi-Fi\s*\+\s*移动网络/gi, ' ').replace(/\+ 移动网络/gi, ' ').replace(/Wi-Fi/gi, ' ').replace(/WIFI/gi, ' ').replace(/移动网络/gi, ' ');
+        // 先吞掉 "WiFi版/WIFI版/Wi-Fi版"（含中间空格），避免留下孤立的 "版"
+        raw = raw.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        // 原有的 WiFi 各写法替换
+        raw = raw.replace(/Wi-Fi\s*\+\s*移动网络/gi, ' ');
+        raw = raw.replace(/\+ 移动网络/gi, ' ');
+        raw = raw.replace(/Wi-Fi/gi, ' ');
+        raw = raw.replace(/WIFI/gi, ' ');
+        raw = raw.replace(/移动网络/gi, ' ');
         raw = raw.replace(/LTE|eSIM\s*版/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
         raw = raw.replace(/鸿蒙NEXT先锋版|先锋版|NEXT先锋版/gi, ' ');
         raw = raw.replace(/\b\d+mm\b/gi, ' ');
@@ -441,8 +575,10 @@
         raw = raw.replace(/[（(]\s*[54]G\s*[）)]/gi, ' ');
         raw = raw.replace(/\b[54]G\b/gi, ' ');
         raw = raw.replace(/全网通/gi, ' ');
-        raw = raw.replace(/细闪|素皮|无充电器版|广东|AI 版|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
-        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版/gi, ' ');
+        // 去除 AI版（含空格或不含空格）
+        raw = raw.replace(/AI\s*版/gi, ' ');
+        raw = raw.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
+        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
         const fns = ['SKU型号', 'skuId', '品牌', '入网型号', '供应型号', '支持网络', '是否激活', '维修记录', '是否演示机', '是否官方二手机', '是否官翻机', '是否零售机', '是否购买了华为care', '是否空中激活', '激活日期', '国家版本', '是否在保', '保修模式', '保修结束日期', '是否官换机', '是否个性化定制', '屏幕尺寸', 'CPU', '商品属性', '是否自营渠道购买', '内存', '颜色', '零件描述'];
         for (const f of fns) { const i = raw.indexOf(f); if (i !== -1) { raw = raw.substring(0, i).trim(); break; } }
         raw = raw.replace(/[：:].*$/, '').replace(/[-\s]+$/, '').trim();
@@ -693,7 +829,7 @@
         errs.length > 0 ? showBanner(errs) : hideBanner();
     }
 
-    // ========== 监听另一个脚本的“读取剪贴板”按钮 ==========
+    // ========== 监听另一个脚本的"读取剪贴板"按钮 ==========
     function watchClipboardButton() {
         document.addEventListener('click', async (e) => {
             const btn = e.target.closest('button');
@@ -721,19 +857,19 @@
         document.addEventListener('click', function(e) {
             const target = e.target.closest('button');
             if (target && target.textContent.includes('开始检测')) {
-                console.log('[型号脚本] 检测到“开始检测”按钮点击，清空所有数据源');
+                console.log('[型号脚本] 检测到"开始检测"按钮点击，清空所有数据源');
                 resetAllSources();
                 setTimeout(() => checkModel(true), 1500);
             }
         }, true);
     }
 
-    // ========== 监听“提交”按钮 ==========
+    // ========== 监听"提交"按钮 ==========
     function watchSubmitButton() {
         document.addEventListener('click', function(e) {
             const target = e.target.closest('button');
             if (target && target.textContent.includes('提交')) {
-                console.log('[型号脚本] 检测到“提交”按钮点击，清空所有数据源');
+                console.log('[型号脚本] 检测到"提交"按钮点击，清空所有数据源');
                 resetAllSources();
                 setTimeout(() => checkModel(true), 1500);
             }
