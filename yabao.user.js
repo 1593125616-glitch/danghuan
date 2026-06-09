@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.42
+// @version      0.43
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
+// @match        https://www.57306.com/*
 // @match        https://support.oppo.com/*
 // @match        https://support.vivo.com.cn/*
 // @grant        none
