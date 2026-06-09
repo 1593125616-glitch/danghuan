@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.1.7
+// @version      1.1.8
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -367,6 +367,10 @@
                             officialModelClean = raw || null;
                         }
                     } else {
+                        const bodyText = document.body.textContent || '';
+                        if (/物品30天内在库质检报告/.test(bodyText) && !/保修机/.test(bodyText)) {
+                            return null;
+                        }
                         officialModelClean = extractOfficialModel(officialText, brand, category);
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                             officialModelClean = officialModelClean.replace(/\bGPS\b.*$/gi, '').replace(/移动网络.*$/gi, '').trim();
