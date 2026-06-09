@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.5.8
-// @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果“是否国行”为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击“开始检测”或“提交”清空旧数据，按钮加大，全品类通用，凌晨3点强刷
+// @version      1.7.0
+// @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果"是否国行"为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测，华为/OPPO平板关键词匹配)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击"开始检测"或"提交"清空旧数据，按钮加大，全品类通用，凌晨3点强刷
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @grant        none
-// @updateURL    https://raw.gitcode.com/py1998/shajing/raw/main/suk.user.js
-// @downloadURL  https://raw.gitcode.com/py1998/shajing/raw/main/suk.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // ==/UserScript==
 
 (function() {
@@ -95,7 +95,7 @@
 
     // ==================== 华为手表颜色规则 ====================
     const huaweiWatchColorRules = [
-        // 硬性颜色规则（查询颜色包含“/”的精确映射）
+        // 硬性颜色规则（查询颜色包含"/"的精确映射）
         { keywords: ['曜石黑', '黑色氟橡胶表带'], expected: '曜石黑' },
         { keywords: ['银河紫', '紫色航天级钛合金表壳', '紫色素皮复合表带'], expected: '银河紫' },
         { keywords: ['钛空银', '航天级钛合金表壳', '钛金属表带'], expected: '钛空银' },
@@ -239,6 +239,15 @@
                                 }
                                 return null;
                             }
+                        }
+                        return null;
+                    }
+
+                    // OPPO平板颜色规则：官方颜色含"银色(联名版定制外观)"，系统需选"艺术家限量定制版"
+                    if (/OPPO/i.test(brand) && /平板/.test(category) && /银色.*联名版.*定制外观|联名版.*定制外观/i.test(officialColor)) {
+                        const expected = '艺术家限量定制版';
+                        if (selectedVal.replace(/\s+/g, '') !== expected.replace(/\s+/g, '')) {
+                            return `颜色 应为【${expected}】，你选了【${selectedVal}】`;
                         }
                         return null;
                     }
@@ -600,6 +609,102 @@
                         return null;
                     }
 
+                    // 华为平板网络制式检测：根据产品描述中的关键词自动匹配
+                    if (/华为|Huawei/i.test(brand) && /平板/.test(category)) {
+                        let selected = '';
+                        const allLabels = document.querySelectorAll('.el-form-item__label');
+                        for (const label of allLabels) {
+                            const labelText = label.textContent.trim();
+                            if (/网络制式/.test(labelText)) {
+                                const content = label.nextElementSibling;
+                                if (content) {
+                                    const active = content.querySelector('.el-radio-button.is-active .el-radio-button__inner');
+                                    if (active) selected = getCleanOptionText(active);
+                                }
+                                break;
+                            }
+                        }
+                        if (!selected || /不检测|跳过/i.test(selected)) return null;
+
+                        const desc = getField('产品描述');
+                        if (!desc) return null;
+
+                        // 获取当前模板实际可用的网络制式选项
+                        const availableOptions = [];
+                        for (const label of document.querySelectorAll('.el-form-item__label')) {
+                            if (/网络制式/.test(label.textContent)) {
+                                const content = label.nextElementSibling;
+                                if (content) {
+                                    content.querySelectorAll('.el-radio-button__inner').forEach(el => {
+                                        availableOptions.push(getCleanOptionText(el));
+                                    });
+                                }
+                                break;
+                            }
+                        }
+
+                        let kind = ''; // 'wifi', '4g', '5g'
+                        if (/5G版/i.test(desc)) {
+                            kind = '5g';
+                        } else if (/LTE版|全网通版|全网通|插卡版/i.test(desc)) {
+                            kind = '4g';
+                        } else if (/WIFI版|WiFi版/i.test(desc)) {
+                            kind = 'wifi';
+                        } else {
+                            return null;
+                        }
+
+                        // 根据模板实际选项名决定 expected
+                        let expected = '';
+                        if (kind === '5g') {
+                            expected = 'WIFI+5G版';
+                        } else if (kind === '4g') {
+                            const match = availableOptions.find(o => /4G版|插卡版|蜂窝版|移动网络版/i.test(o));
+                            expected = match || 'WIFI+4G版';
+                        } else if (kind === 'wifi') {
+                            const match = availableOptions.find(o => /^WIFI版$|^WiFi版$/i.test(o.trim()));
+                            expected = match || 'WIFI版';
+                        }
+
+                        if (!expected) return null;
+
+                        // 归一化比较：插卡版↔4G版视作等价，WiFi↔WIFI不区分
+                        const norm = s => s.replace(/插卡版/i, '4G版').replace(/WiFi/i, 'WIFI').toLowerCase();
+                        if (norm(selected) !== norm(expected)) {
+                            return `网络制式 应为【${expected}】（产品描述含关键词），你选了【${selected}】`;
+                        }
+                        return null;
+                    }
+
+                    // OPPO平板网络制式检测：型号含"SIM卡版"则需选 WIFI+5G版，不含则不提示
+                    if (/OPPO/i.test(brand) && /平板/.test(category)) {
+                        let selected = '';
+                        const allLabels = document.querySelectorAll('.el-form-item__label');
+                        for (const label of allLabels) {
+                            const labelText = label.textContent.trim();
+                            if (/网络制式/.test(labelText)) {
+                                const content = label.nextElementSibling;
+                                if (content) {
+                                    const active = content.querySelector('.el-radio-button.is-active .el-radio-button__inner');
+                                    if (active) selected = getCleanOptionText(active);
+                                }
+                                break;
+                            }
+                        }
+                        if (!selected || /不检测|跳过/i.test(selected)) return null;
+
+                        const modelField = getField('型号');
+                        if (!modelField) return null;
+
+                        if (/SIM卡版|SIM卡/i.test(modelField)) {
+                            if (selected.toLowerCase() !== 'wifi+5g版') {
+                                return `网络制式 应为【WIFI+5G版】（型号含"SIM卡版"），你选了【${selected}】`;
+                            }
+                        }
+                        // 不含 SIM卡版 则不提示
+                        return null;
+                    }
+
                     if (/苹果|Apple/i.test(brand)) {
                         const model = getInputValueByLabel('机型') || getField('型号');
                         if (!model || !/iPad/i.test(model)) return null;
@@ -653,8 +758,8 @@
 
                     if (selectedNetwork !== '全网通') {
                         const reason = [];
-                        if (modelField && modelField.includes('全网通')) reason.push('型号中含“全网通”');
-                        if (networkField && networkField.trim() === '全网通') reason.push('网络制式字段为“全网通”');
+                        if (modelField && modelField.includes('全网通')) reason.push('型号中含"全网通"');
+                        if (networkField && networkField.trim() === '全网通') reason.push('网络制式字段为"全网通"');
                         return `网络制式 应为【全网通】（${reason.join('，')}），你选了【${selectedNetwork}】`;
                     }
                     return null;
@@ -708,20 +813,49 @@
                 },
             },
             {
-                name: '账号（苹果激活锁检测）',
-                labelKeywords: ['账号'],
+                name: '激活锁（苹果全品类检测）',
+                labelKeywords: [],
                 conditionalCheck: (officialText) => {
                     const brand = getInputValueByLabel('品牌');
                     if (!/苹果|Apple/i.test(brand)) return null;
 
-                    const activationLock = extractField(officialText, '激活锁状态');
+                    const category = getInputValueByLabel('品类');
+                    if (!category) return null;
+
+                    let activationLock = extractField(officialText, '激活锁状态');
+                    if (!activationLock) {
+                        activationLock = extractField(officialText, '激活锁');
+                    }
                     if (!activationLock) return null;
 
-                    if (activationLock.includes('开启')) {
-                        let selected = getSelectedValue(['账号']);
+                    if (!activationLock.includes('开启')) return null;
+
+                    if (/^手机$/.test(category)) {
+                        const selected = getSelectedValue(['账号']);
                         if (!selected || /不检测|跳过/i.test(selected)) return null;
                         if (selected !== 'iCloud无法注销') {
                             return `账号 应为【iCloud无法注销】（激活锁已开启），你选了【${selected}】`;
+                        }
+                    } else if (/^平板$/.test(category)) {
+                        const availableOptions = getAvailableOptions('ID锁');
+                        const hasSpecialTemplate = availableOptions.some(o => o.includes('ID/账户锁无法解除'));
+                        const expected = hasSpecialTemplate ? 'ID/账户锁无法解除' : 'iCloud无法注销';
+                        const selected = getSelectedValue(['ID锁']);
+                        if (!selected || /不检测|跳过/i.test(selected)) return null;
+                        if (selected !== expected) {
+                            return `ID锁 应为【${expected}】（激活锁已开启），你选了【${selected}】`;
+                        }
+                    } else if (/^智能手表$/.test(category)) {
+                        const selected = getSelectedValue(['密码及账号']);
+                        if (!selected || /不检测|跳过/i.test(selected)) return null;
+                        if (selected !== '有锁') {
+                            return `密码及账号 应为【有锁】（激活锁已开启），你选了【${selected}】`;
+                        }
+                    } else if (/^(笔记本|电脑)$/.test(category)) {
+                        const selected = getSelectedValue(['ID锁']);
+                        if (!selected || /不检测|跳过/i.test(selected)) return null;
+                        if (selected !== 'iCloud账号无法解除') {
+                            return `ID锁 应为【iCloud账号无法解除】（激活锁已开启），你选了【${selected}】`;
                         }
                     }
                     return null;
@@ -748,7 +882,7 @@
                 },
             },
         ],
-        bannerStyle: `position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:99999; background:#d93025; color:#fff; padding:8px 16px; font-size:14px; font-weight:bold; text-align:center; border-radius:0 0 6px 6px; box-shadow:0 2px 8px rgba(0,0,0,0.3); white-space:nowrap;`,
+        bannerStyle: `position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:99999; background:#d93025; color:#fff; padding:11px 16px; font-size:14px; font-weight:bold; text-align:center; border-radius:0 0 6px 6px; box-shadow:0 2px 8px rgba(0,0,0,0.3); white-space:nowrap;`,
         minOfficialLength: 30,
         maxRetries: 20,
         retryInterval: 500,
@@ -969,7 +1103,8 @@
         retryCount = 0;
 
         const brand = getInputValueByLabel('品牌');
-        if (brand && /苹果|Apple/i.test(brand) && /是否置换机器\/黑机[：:]\s*是/i.test(txt)) {
+        // 黑机检测：同时支持"是否置换机器/黑机: 是"和"是否黑机: 是"两种格式
+        if (brand && /苹果|Apple/i.test(brand) && /是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
             showBanner(['该机型是黑机需要打掉']);
             return;
         }
@@ -1035,7 +1170,7 @@
         }, 2000);
     }
 
-    // ==================== 监听“开始检测”或“提交”按钮，清空所有对比缓存 ====================
+    // ==================== 监听"开始检测"或"提交"按钮，清空所有对比缓存 ====================
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
         if (!btn) return;
