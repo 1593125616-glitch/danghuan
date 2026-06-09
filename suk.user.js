@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.4
+// @version      1.7.10
 // @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果"是否国行"为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测，华为/OPPO平板关键词匹配)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击"开始检测"或"提交"清空旧数据，按钮加大，全品类通用，凌晨3点强刷
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -260,6 +260,14 @@
                         }
                     }
 
+                    // Apple 笔记本：灰色 → 深空灰
+                    if (/苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑') && /^灰色$/i.test(officialColor)) {
+                        if (normalizedSelected !== '深空灰') {
+                            return `颜色 应为【深空灰】（官方为灰色），你选了【${selectedVal}】`;
+                        }
+                        return null;
+                    }
+
                     if (!/^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) {
                         if (normalize(officialColor).includes(normalizedSelected) || normalizedSelected.includes(normalize(officialColor))) return null;
                         return `颜色 应为【${officialColor}】，你选了【${selectedVal}】`;
@@ -279,6 +287,9 @@
                 name: '存储容量',
                 labelKeywords: ['存储容量', '存储', '内存', '容量'],
                 customCheck: (officialText, selectedVal) => {
+                    const brand = getInputValueByLabel('品牌');
+                    const category = getInputValueByLabel('品类');
+                    if (category === '笔记本' || category === '电脑') return null;
                     function normalizeStorage(str) {
                         const comboMatch = str.match(/^(\d+)\s*(GB|G|TB|T)?\s*\+\s*(\d+)\s*(GB|G|TB|T)?$/i);
                         if (comboMatch) {
@@ -328,10 +339,23 @@
                     const isApple = /苹果|Apple/i.test(brand);
                     const model = getInputValueByLabel('机型') || getField('型号');
 
+                    // 是否国行: 无 时跳过检测
+                    const domesticCheck = getField('版本类型') || getField('是否国行');
+                    if (domesticCheck === '无') return null;
+
                     if (isApple) {
                         let isDomestic = getField('版本类型');
                         if (!isDomestic) isDomestic = getField('是否国行');
-                        if (!isDomestic || isDomestic === '无') return null;
+                        if (!isDomestic) return null;
+
+                        // Apple 笔记本：仅检测 大陆国行 / 非国行
+                        const category = getInputValueByLabel('品类');
+                        if (category === '笔记本' || category === '电脑') {
+                            const expected = isDomestic === '国行' ? '大陆国行' : '非国行';
+                            if (selectedVal !== expected)
+                                return `购买渠道 应为【${expected}】，你选了【${selectedVal}】`;
+                            return null;
+                        }
 
                         const machineType = getField('机器类型');
                         const networkLock = getField('网络锁状态');
@@ -485,7 +509,7 @@
                             let warrantyOptionCount = 0;
                             for (const label of allLabels) {
                                 const text = label.textContent.trim();
-                                if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态')) {
+                                if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态') || text.includes('保修期')) {
                                     const content = label.nextElementSibling;
                                     if (content) {
                                         const options = content.querySelectorAll('.el-radio-button__inner');
@@ -495,8 +519,22 @@
                                 }
                             }
                             if (warrantyOptionCount === 2) {
-                                if (selectedVal !== '保修时长<30天')
-                                    return `保修状态 应为【保修时长<30天】（已过保），你选了【${selectedVal}】`;
+                                let labelB = '保修时长<30天';
+                                for (const l of document.querySelectorAll('.el-form-item__label')) {
+                                    const t = l.textContent.trim();
+                                    if (t.includes('保修时长') || t.includes('保修剩余') || t.includes('保修状态') || t.includes('保修期')) {
+                                        const opts = l.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
+                                        if (opts && opts.length === 2) {
+                                            const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
+                                            if (t0.includes('一个月') || t1.includes('一个月')) {
+                                                labelB = '保修期一个月内或过保';
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                                if (selectedVal !== labelB)
+                                    return `保修状态 应为【${labelB}】（已过保），你选了【${selectedVal}】`;
                                 return null;
                             }
                             if (selectedVal !== '保修时长<30天')
@@ -524,10 +562,26 @@
                         }
                     }
                     if (warrantyOptionCount === 2) {
-                        if (diffDays >= 30 && selectedVal !== '保修时长≥30天')
-                            return `保修状态 应为【保修时长≥30天】（剩余${diffDays}天），你选了【${selectedVal}】`;
-                        if (diffDays < 30 && selectedVal !== '保修时长<30天')
-                            return `保修状态 应为【保修时长<30天】（剩余${diffDays}天），你选了【${selectedVal}】`;
+                        // 检测实际模板选项名称
+                        let labelA = '保修时长≥30天', labelB = '保修时长<30天';
+                        for (const label of document.querySelectorAll('.el-form-item__label')) {
+                            const text = label.textContent.trim();
+                        if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态') || text.includes('保修期')) {
+                                const opts = label.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
+                                if (opts && opts.length === 2) {
+                                    const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
+                                    if (t0.includes('一个月') || t1.includes('一个月')) {
+                                        labelA = '保修期一个月以上';
+                                        labelB = '保修期一个月内或过保';
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        if (diffDays >= 30 && selectedVal !== labelA)
+                            return `保修状态 应为【${labelA}】（剩余${diffDays}天），你选了【${selectedVal}】`;
+                        if (diffDays < 30 && selectedVal !== labelB)
+                            return `保修状态 应为【${labelB}】（剩余${diffDays}天），你选了【${selectedVal}】`;
                         return null;
                     }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.2
+// @version      1.2.7
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -213,6 +213,42 @@
         'watch se 第3代': 'Apple Watch SE 3',
     };
 
+    // ========== Apple MacBook 映射表 ==========
+    const appleMacBookModelMapping = {
+        'macbook pro retina, 13寸, early 2015': '苹果 15年 13寸 MacBook Pro',
+        'macbook pro 16寸, 2019': '苹果 19年 16寸 MacBook Pro',
+        'macbook pro 13寸, m1, 2020': '苹果 20年 13寸 MacBook Pro M1',
+        'macbook pro 13寸, 2019, t3': '苹果 19年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2017, t3': '苹果 17年 13寸 MacBook Pro',
+        'macbook pro retina, 13寸, mid 2012': '苹果 12年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2018, t3': '苹果 18年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2020, t3': '苹果 20年 13寸 MacBook Pro',
+        'macbook pro 13寸, m2, 2022': '苹果 22年 13寸 MacBook Pro',
+        'macbook air 13寸, m4, 2025': '苹果 25年 13寸 MacBook Air',
+        'macbook air 13寸, 2017': '苹果 17年 13寸 MacBook Air',
+        'macbook air 13寸, early 2015': '苹果 15年 13寸 MacBook Air',
+        'macbook air 13寸, early 2014': '苹果 14年 13寸 MacBook Air',
+        'macbook air 13寸, m3, 2024': '苹果 24年 13寸 MacBook Air',
+        'macbook air 13寸, mid 2012': '苹果 12年 13寸 MacBook Air',
+        'macbook air 13寸, mid 2013': '苹果 13年 13寸 MacBook Air',
+        'macbook air 11寸, early 2014': '苹果 14年 11寸 MacBook Air',
+        'macbook air 11寸, early 2015': '苹果 15年 11寸 MacBook Air',
+        'macbook air 11寸, mid 2013': '苹果 13年 11寸 MacBook Air',
+        'macbook air 11寸, late 2010': '苹果 10年 11寸 MacBook Air',
+        'macbook air 11寸, mid 2011': '苹果 11年 11寸 MacBook Air',
+        'macbook pro 14寸, m4, 2024': '苹果 24年 14寸 MacBook Pro',
+        'macbook pro 14寸, m4 pro/max, 2024': '苹果 24年 14寸 MacBook Pro',
+        'macbook pro 14寸, m3 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
+        'macbook pro 14寸, m3, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
+        'macbook pro 14寸, m2 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M2',
+    };
+
+    // ========== Apple AirPods 映射表 ==========
+    const appleAirPodsModelMapping = {
+        'airpods 4 anc': '苹果 AirPods 4代（支持主动降噪）',
+        'airpods 4': '苹果 AirPods 4代（不支持主动降噪）',
+    };
+
     function isStrictProductDescBrand(brand) {
         return /OPPO|一加|真我|realme/i.test(brand);
     }
@@ -229,6 +265,15 @@
             cleaned += ' Nike';
         }
         return cleaned;
+    }
+
+    function cleanAppleAirPodsModel(str) {
+        return str
+            .replace(/with\s+Wireless\s+Charging\s+Case/gi, '')
+            .replace(/电版/gi, '')
+            .replace(/代/gi, '')
+            .replace(/\(\s*USB-C\s*\)/gi, '')
+            .replace(/\s+/g, ' ').trim();
     }
 
     // ========== 页面选中颜色/存储获取 ==========
@@ -285,6 +330,7 @@
         let cleaned = val;
         cleaned = cleaned.replace(/触控笔/gi, '');
         cleaned = cleaned.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
+        cleaned = cleaned.replace(/\(\s*USB-C\s*\)/gi, ' ');
         cleaned = cleaned.replace(/全网通/gi, '');
         cleaned = cleaned.replace(/[（(]\s*[54]G\s*[）)]/gi, ' ');
         cleaned = cleaned.replace(/\b[54]G\b/gi, ' ');
@@ -295,6 +341,9 @@
         cleaned = cleaned.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
         if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
             cleaned = cleanAppleWatchModel(cleaned);
+        }
+        if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
+            cleaned = cleanAppleAirPodsModel(cleaned);
         }
         return cleaned.replace(/\s+/g, ' ').trim();
     }
@@ -385,8 +434,15 @@
                             let raw = modelMatch[1].trim();
                             raw = forceTruncateAtKeywords(raw);
                             raw = cleanModelString(raw);
+                            if (/苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
+                                const lastParen = raw.lastIndexOf(')');
+                                if (lastParen !== -1) raw = raw.substring(0, lastParen + 1).trim();
+                            }
                             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 raw = cleanAppleWatchModel(raw);
+                            }
+                            if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
+                                raw = cleanAppleAirPodsModel(raw);
                             }
                             raw = removeColorAndStorage(raw, color, storage);
                             if (!color || !storage) {
@@ -402,8 +458,15 @@
                             return null;
                         }
                         officialModelClean = extractOfficialModel(officialText, brand, category);
+                        if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
+                            const lastParen = officialModelClean.lastIndexOf(')');
+                            if (lastParen !== -1) officialModelClean = officialModelClean.substring(0, lastParen + 1).trim();
+                        }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                             officialModelClean = cleanAppleWatchModel(officialModelClean);
+                        }
+                        if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
+                            officialModelClean = cleanAppleAirPodsModel(officialModelClean);
                         }
                     }
 
@@ -481,6 +544,26 @@
                     if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                         const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
                         const mapped = appleWatchModelMapping[key];
+                        if (mapped) {
+                            if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
+                        }
+                    }
+
+                    // ========== Apple MacBook 硬性型号映射 ==========
+                    if (/苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const mapped = appleMacBookModelMapping[key];
+                        if (mapped) {
+                            if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
+                        }
+                    }
+
+                    // ========== Apple AirPods 硬性型号映射 ==========
+                    if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const mapped = appleAirPodsModelMapping[key];
                         if (mapped) {
                             if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
                             return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
@@ -623,6 +706,7 @@
         raw = raw.replace(/AI\s*版/gi, ' ');
         raw = raw.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
         raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
+        raw = raw.replace(/\(\s*USB-C\s*\)/gi, ' ');
         const fns = ['SKU型号', 'skuId', '品牌', '入网型号', '供应型号', '支持网络', '是否激活', '维修记录', '是否演示机', '是否官方二手机', '是否官翻机', '是否零售机', '是否购买了华为care', '是否空中激活', '激活日期', '国家版本', '是否在保', '保修模式', '保修结束日期', '是否官换机', '是否个性化定制', '屏幕尺寸', 'CPU', '商品属性', '是否自营渠道购买', '内存', '颜色', '零件描述'];
         for (const f of fns) { const i = raw.indexOf(f); if (i !== -1) { raw = raw.substring(0, i).trim(); break; } }
         raw = raw.replace(/[：:].*$/, '').replace(/[-\s]+$/, '').trim();
