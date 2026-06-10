@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.31
+// @version      1.7.39
 // @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果"是否国行"为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测，华为/OPPO平板关键词匹配)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击"开始检测"或"提交"清空旧数据，按钮加大，全品类通用，凌晨3点强刷
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -310,6 +310,21 @@
                             return singleMatch[1] + u;
                         }
                         return str.replace(/\s+/g, '').replace(/(\d+)G(?!B)/gi, '$1GB').replace(/(\d+)T(?!B)/gi, '$1TB');
+                    }
+
+                    // 优先从"容量:"字段提取
+                    const capField = extractField(officialText, '容量') || extractField(officialText, '存储容量');
+                    if (capField) {
+                        const normalizedField = normalizeStorage(capField);
+                        const stdSelected = normalizeStorage(selectedVal);
+                        if (normalizedField.toLowerCase() === stdSelected.toLowerCase()) return null;
+                        // 选中值是单个容量（如512G）且官方是组合值（如12GB+512GB）时，匹配组合中一部分则不提示
+                        const f = normalizedField.toLowerCase(), s = stdSelected.toLowerCase();
+                        if (!s.includes('+') && f.includes('+')) {
+                            const parts = f.split('+');
+                            if (parts.some(p => p.trim() === s)) return null;
+                        }
+                        return `存储容量 应为【${capField}】，你选了【${selectedVal}】`;
                     }
 
                     let stdSelected = normalizeStorage(selectedVal);
@@ -1310,10 +1325,24 @@
         bannerEl.style.width = 'auto';
     }
 
+    function showBottomPopup(errMap) {
+        const existing = document.querySelector('.suk-bottom-popup');
+        if (existing) existing.remove();
+        const names = Object.keys(errMap);
+        if (!names.length) return;
+        const text = names.join('-');
+        const popup = document.createElement('div');
+        popup.className = 'suk-bottom-popup';
+        popup.textContent = '⚠【' + text + '】可能选错';
+        popup.style.cssText = 'position:fixed; bottom:7cm; left:20px; z-index:100000; background:#d93025; color:#fff; padding:6px 8px; border-radius:6px; font-size:14px; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.3); max-width:3.5cm; line-height:1.3; white-space:normal; overflow-wrap:break-word;';
+        document.body.appendChild(popup);
+    }
+
     function hideBanner() {
         if (bannerEl) { bannerEl.remove(); bannerEl = null; }
         clearTimeout(hideTimer);
         document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
+        document.querySelectorAll('.suk-bottom-popup').forEach(el => el.remove());
     }
 
     function check(force = false) {
@@ -1384,6 +1413,7 @@
         } else if (hasActiveCheck && !Object.keys(inlineErrs).length && document.querySelector('.suk-err-tip')) {
             document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
         }
+        showBottomPopup(inlineErrs);
     }
 
     function addClipboardButton() {
