@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.16
+// @version      1.2.19
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -470,6 +470,11 @@
 
                     if (!officialModelClean) return null;
 
+                    // 华为/荣耀笔记本：去除"款"和"版"
+                    if ((/华为|Huawei/i.test(brand) || /荣耀|Honor/i.test(brand)) && (category === '笔记本' || category === '电脑')) {
+                        officialModelClean = officialModelClean.replace(/[款版]/g, '').trim();
+                    }
+
                     // ========== 华为耳机特殊规则 ==========
                     if (brand === '华为' && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                         if (/freebuds\s*4e/i.test(officialText)) {
@@ -565,6 +570,76 @@
                         if (mapped) {
                             if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
                             return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
+                        }
+                    }
+
+                    // ========== 华为/荣耀笔记本特殊规则 ==========
+                    if ((/华为|Huawei/i.test(brand) || /荣耀|Honor/i.test(brand)) && (category === '笔记本' || category === '电脑') && officialModelClean) {
+                        let modelForMatch = officialModelClean;
+                        const desc = (extractInfoLine(officialText, '产品描述') || '').toLowerCase();
+                        const prodCode = (extractInfoLine(officialText, '产品代码') || '').toLowerCase();
+                        let expected = null;
+
+                        if (/华为|Huawei/i.test(brand)) {
+                            if (/matebook\s*e/i.test(modelForMatch)) {
+                                if (/drc-w5[68]|drc-w38|drc-w76/i.test(prodCode)) expected = '华为 MateBook E 系列 2022年';
+                                else if (/pak-al09|pak-w09/i.test(prodCode)) expected = '华为 MateBook E 系列 2019年';
+                                else if (/bl-w0[9]|bl-w19/i.test(prodCode)) expected = '华为 MateBook E 系列 2017年';
+                                else if (/drr-w5[68]|drr-w76/i.test(prodCode)) expected = '华为 MateBook E 系列 2023年';
+                            }
+                            if (!expected && /matebook\s*13s/i.test(modelForMatch) && /2021/.test(modelForMatch)) {
+                                expected = '华为 MateBook 13s（触控屏）';
+                            }
+                            if (!expected && /matebook\s*13(?!s)/i.test(modelForMatch) && /2020/.test(modelForMatch)) {
+                                expected = desc.includes('触屏') ? '华为 MateBook 13 2020款（触控屏）' : '华为 MateBook 13 2020款（非触控屏）';
+                            }
+                            if (!expected && /matebook\s*13(?!s)/i.test(modelForMatch) && /2021/.test(modelForMatch)) {
+                                expected = '华为 MateBook 13 系列';
+                            }
+                            if (!expected && /matebook\s*13(?!s)/i.test(modelForMatch) && /2019/.test(modelForMatch)) {
+                                expected = '华为 MateBook 13 系列';
+                            }
+                            if (!expected && /matebook\s*d\s*14/i.test(modelForMatch) && /2022/.test(modelForMatch) && /se/i.test(modelForMatch)) {
+                                expected = '华为 MateBook D 14 SE 2022';
+                            }
+                            if (!expected && /matebook\s*14(?!s)/i.test(modelForMatch) && /2019/.test(modelForMatch)) {
+                                expected = '华为 MateBook 14 2019款';
+                            }
+                            if (!expected && /matebook\s*14(?!s)/i.test(modelForMatch) && /2020/.test(modelForMatch)) {
+                                expected = desc.includes('触屏') ? '华为 MateBook 14 2020款（触控屏）' : '华为 MateBook 14 2020款（非触控屏）';
+                            }
+                            if (!expected && /matebook\s*d\s*14/i.test(modelForMatch) && /2022/.test(modelForMatch)) {
+                                expected = '华为 MateBook D 14 2022';
+                            }
+                        }
+
+                        if (/荣耀|Honor/i.test(brand)) {
+                            const yearMatch = modelForMatch.match(/(20[0-4]\d)/);
+                            if (yearMatch) {
+                                const idx = modelForMatch.indexOf(yearMatch[1]);
+                                if (idx !== -1) modelForMatch = modelForMatch.substring(0, idx + 4).trim();
+                            }
+                            const hmLower = modelForMatch.toLowerCase();
+                            if (/magicbook/i.test(hmLower) && /2019/.test(hmLower) && !/15/.test(hmLower)) {
+                                expected = '荣耀 MagicBook 2019 14寸';
+                            } else if (/magicbook\s*x\s*16\s*pro/i.test(hmLower) && /2024/.test(hmLower)) {
+                                expected = '荣耀 MagicBook X 16 Pro 2024';
+                            } else if (/magicbook\s*14/i.test(hmLower) && /2021/.test(hmLower)) {
+                                expected = '荣耀 MagicBook 14 2021款';
+                            } else if (/magicbook\s*15/i.test(hmLower) && /2019/.test(hmLower)) {
+                                expected = '荣耀 MagicBook 15';
+                            } else {
+                                expected = modelForMatch;
+                            }
+                        }
+
+                        if (expected) {
+                            const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                            const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                            if (userNorm !== expectedNorm) {
+                                return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                            }
+                            return null;
                         }
                     }
 
