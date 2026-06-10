@@ -7,8 +7,8 @@
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        none
-// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@latest/jixing.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@latest/jixing.user.js
 // ==/UserScript==
 
 (function() {
