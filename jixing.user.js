@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.7
+// @version      1.2.8
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -241,6 +241,7 @@
         'macbook pro 14寸, m3 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
         'macbook pro 14寸, m3, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
         'macbook pro 14寸, m2 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M2',
+        'macbook retina, 12寸, early 2016': '苹果 16年 12寸 MacBook',
     };
 
     // ========== Apple AirPods 映射表 ==========
