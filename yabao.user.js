@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.49
+// @version      0.50
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -462,6 +462,7 @@
         (function() {
             log('VIVO 格式化提取已啟動');
             let lastCopied = '';
+            let queried = false;
 
             function copyText(text) {
                 if (!text) return;
@@ -485,7 +486,7 @@
                 let container = queryTitle.parentElement;
                 while (container) {
                     const text = container.innerText;
-                    if (text.includes('IMEI码') && (text.includes('激活日期') || text.includes('SN码'))) return container;
+                    if (text.includes('IMEI码') && (text.includes('激活日期') || text.includes('SN码') || text.includes('序列号'))) return container;
                     container = container.parentElement;
                 }
                 return null;
@@ -549,7 +550,8 @@
                     '温馨提示', '以上信息仅供参考', '本查询结果仅供参考',
                     '消费者可凭有效发票', '保障服务状态', '＊查询提示',
                     '了解产品', '在线购买', '服务支持', '关于vivo',
-                    '在线客服', 'Select Location', '©'
+                    '在线客服', 'Select Location', '©',
+                    '工信部', '真伪查询'
                 ];
                 let endIdx = fullText.length;
                 for (const kw of endKeywords) {
@@ -561,7 +563,7 @@
                 const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
                 // 跳过无关行
-                const skipWords = ['产品信息', '机型图片仅供参考'];
+                const skipWords = ['产品信息', '机型图片仅供参考', '外围图片市场参考', '外围图片，仅供参考'];
                 const cleanLines = lines.filter(l => !skipWords.some(w => l.includes(w)));
 
                 // 逐行处理转换
@@ -575,8 +577,8 @@
                         continue;
                     }
 
-                    // 处理「您的机型：Y300 12G+512G」→ 机型 + 容量
-                    if (line.startsWith('您的机型')) {
+                    // 处理「您的机型/机箱/配件：Y300 12G+512G」→ 机型 + 容量
+                    if (/^您的(?:机型|机箱|配件)/.test(line)) {
                         const colonIdx = line.indexOf('：');
                         const rest = colonIdx !== -1 ? line.substring(colonIdx + 1).trim() : line.replace('您的机型', '').trim();
                         const { model, capacity } = parseModelCapacity(rest);
@@ -585,9 +587,15 @@
                         continue;
                     }
 
-                    // 处理「机型颜色：青松」→ 「颜色：青松」
-                    if (line.startsWith('机型颜色')) {
-                        output.push(line.replace('机型颜色', '颜色'));
+                    // 处理「机型颜色/外壳颜色：青松」→ 「颜色：青松」
+                    if (/^(机型颜色|外壳颜色)/.test(line)) {
+                        output.push(line.replace(/^(机型颜色|外壳颜色)/, '颜色'));
+                        continue;
+                    }
+
+                    // 处理「序列号：xxx」→ 「SN码：xxx」
+                    if (/^序列号/.test(line)) {
+                        output.push(line.replace(/^序列号/, 'SN码'));
                         continue;
                     }
 
@@ -616,6 +624,7 @@
             }
 
             function tryExtractAndCopy() {
+                if (!queried) return false;
                 const card = findResultCard();
                 if (!card) return false;
                 const resultText = extractCleanResult(card);
@@ -629,12 +638,13 @@
                 return false;
             }
 
-            // 點擊「查询」按钮时重置复制状态
+            // 點擊「查询」按钮时重置复制状态并允许复制
             document.addEventListener('click', function(e) {
                 const target = e.target.closest('button, a, span, div');
                 if (target && (target.textContent.includes('查询') || target.textContent.includes('立即查询'))) {
                     log('重置複製狀態');
                     lastCopied = '';
+                    queried = true;
                 }
             }, true);
 
