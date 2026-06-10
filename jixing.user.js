@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.9
+// @version      1.2.10
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
-// @match        http://yihuan.oppoer.me/static/product/index.html
+// @match        http://yihuan.oppoer.me/static/*
 // @grant        none
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/jixing.user.js
