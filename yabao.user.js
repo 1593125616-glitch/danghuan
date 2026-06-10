@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.47
+// @version      0.49
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
 // @match        https://www.57306.com/*
 // @match        https://support.oppo.com/*
 // @match        https://support.vivo.com.cn/*
-// @grant        none
+// @grant        GM_setClipboard
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js
 // ==/UserScript==
@@ -48,6 +48,34 @@
     // ==================== 通用工具 ====================
     const DEBUG = true;
     function log(...args) { if (DEBUG) console.log('[啞寶腳本]', ...args); }
+
+    function copyToClipboard(text) {
+        if (!text) return false;
+        // GM_setClipboard 不依赖页面焦点，最可靠
+        if (typeof GM_setClipboard !== 'undefined') {
+            try {
+                GM_setClipboard(text);
+                log('✅ GM_setClipboard 成功');
+                return true;
+            } catch (e) {
+                log('GM_setClipboard 失败:', e.message);
+            }
+        }
+        // 备选：页面有焦点时可用
+        window.focus();
+        navigator.clipboard.writeText(text).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        });
+        log('✅ navigator.clipboard 備選複製');
+        return true;
+    }
 
     function findButtonByText(textList, container = document.body) {
         if (!Array.isArray(textList)) textList = [textList];
@@ -106,7 +134,7 @@
     if (host.includes('ybcheck.com')) {
         (function() {
             const MAX_WAIT = 180000;
-            const COPY_BTN_DELAY = 500;   // 修改为500ms
+            const COPY_BTN_DELAY = 1500;   // 延迟后开始检查复制
             const MAX_COPY_WAIT = 15000;
             const GEN_CHECK_INTERVAL = 500;
             const MAX_GEN_ATTEMPTS = Math.ceil(MAX_WAIT / GEN_CHECK_INTERVAL);
@@ -148,23 +176,10 @@
                     log('彈窗內容尚未渲染完成，等待中...');
                     return;
                 }
-                // 自行复制内容到剪贴板（确保成功）
+                // 自行复制内容到剪贴板（GM_setClipboard 不依赖焦点）
                 const saveBox = document.querySelector('.confirm-bd .saveBox');
                 if (saveBox) {
-                    const text = saveBox.innerText.trim();
-                    if (text) {
-                        navigator.clipboard.writeText(text).catch(() => {
-                            const ta = document.createElement('textarea');
-                            ta.value = text;
-                            ta.style.position = 'fixed';
-                            ta.style.opacity = '0';
-                            document.body.appendChild(ta);
-                            ta.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(ta);
-                        });
-                        log('✅ 已複製到剪貼板');
-                    }
+                    copyToClipboard(saveBox.innerText.trim());
                 }
                 // 点击按钮关闭弹窗
                 const copyBtn = findCopyLink();
@@ -348,16 +363,7 @@
 
             function copyText(text) {
                 if (!text) return;
-                navigator.clipboard.writeText(text).then(() => log('✅ 已複製')).catch(() => {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                });
+                copyToClipboard(text);
             }
 
             function findResultCard() {
@@ -459,16 +465,7 @@
 
             function copyText(text) {
                 if (!text) return;
-                navigator.clipboard.writeText(text).then(() => log('✅ 已複製')).catch(() => {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                });
+                copyToClipboard(text);
             }
 
             /**
