@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.43
+// @version      0.47
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -97,7 +97,7 @@
         const saveBox = document.querySelector('.confirm-bd .saveBox');
         if (!saveBox) return false;
         const text = saveBox.innerText.trim();
-        return text.length > 50 && text.includes('查询时间');
+        return text.length > 100 && text.includes('查询时间');
     }
 
     const host = location.hostname;
@@ -148,15 +148,32 @@
                     log('彈窗內容尚未渲染完成，等待中...');
                     return;
                 }
+                // 自行复制内容到剪贴板（确保成功）
+                const saveBox = document.querySelector('.confirm-bd .saveBox');
+                if (saveBox) {
+                    const text = saveBox.innerText.trim();
+                    if (text) {
+                        navigator.clipboard.writeText(text).catch(() => {
+                            const ta = document.createElement('textarea');
+                            ta.value = text;
+                            ta.style.position = 'fixed';
+                            ta.style.opacity = '0';
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+                        });
+                        log('✅ 已複製到剪貼板');
+                    }
+                }
+                // 点击按钮关闭弹窗
                 const copyBtn = findCopyLink();
                 if (copyBtn) {
-                    log('內容已就緒，點擊複製按鈕');
+                    log('點擊複製按鈕關閉彈窗');
                     simpleClick(copyBtn);
-                    log('流程結束');
-                    clearAll();
-                } else {
-                    log('未找到複製按鈕');
                 }
+                log('流程結束');
+                clearAll();
             }
 
             function startWatchingForCopy(serial) {
@@ -238,11 +255,14 @@
                         if (state.querySerial !== serial) return;
                         simpleClick(genBtn);
                         afterGenClick(serial, false);
-                    }, 400);
+                    }, 500);
                 } else {
                     log('按鈕在彈窗內，直接點擊');
-                    simpleClick(genBtn);
-                    afterGenClick(serial, true);
+                    setTimeout(() => {
+                        if (state.querySerial !== serial) return;
+                        simpleClick(genBtn);
+                        afterGenClick(serial, true);
+                    }, 500);
                 }
                 return true;
             }
