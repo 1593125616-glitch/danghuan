@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.10
+// @version      1.2.16
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -455,10 +455,6 @@
                             officialModelClean = raw || null;
                         }
                     } else {
-                        const bodyText = document.body.textContent || '';
-                        if (/物品30天内在库质检报告/.test(bodyText) && !/保修机/.test(bodyText)) {
-                            return null;
-                        }
                         officialModelClean = extractOfficialModel(officialText, brand, category);
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
                             const lastParen = officialModelClean.lastIndexOf(')');
@@ -629,7 +625,7 @@
                 }
             },
         ],
-        bannerStyle: `position:fixed; top:45px; left:10px; z-index:100000; background:#d93025; color:#fff; padding:6px 12px; font-size:13px; font-weight:bold; text-align:left; border-radius:4px; box-shadow:0 2px 12px rgba(0,0,0,0.35); max-width:380px;`,
+        bannerStyle: `position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:100000; background:#d93025; color:#fff; padding:8px 20px; font-size:0.5cm; font-weight:bold; text-align:center; border-radius:0 0 6px 6px; box-shadow:0 2px 12px rgba(0,0,0,0.35); white-space:nowrap;`,
         minOfficialLength: 30, maxRetries: 20, retryInterval: 500, bannerDuration: 120000,
     };
 
@@ -779,6 +775,11 @@
         if (tableVirtualContainer && document.contains(tableVirtualContainer)) {
             return tableVirtualContainer;
         }
+        // IMEI 表格仅当页面含"保修机"时才启用
+        const bodyText = document.body.textContent || '';
+        if (/物品30天内在库质检报告/.test(bodyText) && !/保修机/.test(bodyText)) {
+            return null;
+        }
         const tables = document.querySelectorAll('table');
         for (const table of tables) {
             const cells = table.querySelectorAll('td');
@@ -838,6 +839,11 @@
                 imeiTableText = null;
                 imeiTableTime = 0;
             }
+        }
+
+        // 剪贴板优先
+        if (clipboardText && clipboardText.length >= CONFIG.minOfficialLength) {
+            return clipboardText.trim();
         }
 
         const sources = [
@@ -950,13 +956,17 @@
         }
         retryCount = 0;
         const errs = [];
+        let hasSelection = false;
         for (const it of CONFIG.items) {
             let sel = it.selectedFn ? it.selectedFn() : getSelectedValue(it.labelKeywords);
             if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
+            hasSelection = true;
             const e = it.customCheck(txt, sel);
             if (e) errs.push(e);
         }
-        errs.length > 0 ? showBanner(errs) : hideBanner();
+        if (hasSelection) {
+            errs.length > 0 ? showBanner(errs) : hideBanner();
+        }
     }
 
     // ========== 监听另一个脚本的"读取剪贴板"按钮 ==========
@@ -1025,6 +1035,6 @@
         clearTimeout(window.__modelCheckTimer);
         window.__modelCheckTimer = setTimeout(() => checkModel(true), 300);
     });
-    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-checked'] });
+    obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'aria-checked'] });
     window.addEventListener('load', () => setTimeout(() => checkModel(true), 800));
 })();

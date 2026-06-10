@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.14
+// @version      1.7.31
 // @description  质检核对：保修区间(修复天数计算)、存储、颜色(智能型号匹配，华为手表颜色规则限制品类+硬性颜色，小米/红米手机补充颜色搜索)、购买渠道(美版回退逻辑，修复网络锁空值，苹果"是否国行"为无/空白时跳过)、激活状态、网络制式(小米/红米仅智能手表生效，全网通检测，华为/OPPO平板关键词匹配)、苹果手机小型号、激活锁检测(苹果+小米/红米)，智能选择最新来源，品类/品牌/机型下拉框识别，点击"开始检测"或"提交"清空旧数据，按钮加大，全品类通用，凌晨3点强刷
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1114,6 +1114,10 @@
         if (tableVirtualContainer && document.contains(tableVirtualContainer)) {
             return tableVirtualContainer;
         }
+        // IMEI 表格仅当页面含"保修机"时才启用
+        if (/物品30天内在库质检报告/.test(document.body.textContent) && !/保修机/.test(document.body.textContent)) {
+            return null;
+        }
         const tables = document.querySelectorAll('table');
         for (const table of tables) {
             const cells = table.querySelectorAll('td');
@@ -1210,6 +1214,11 @@
             pageUpdateTime = now;
         }
 
+        // 剪贴板优先
+        if (clipboardOfficialText && clipboardOfficialText.length >= CONFIG.minOfficialLength) {
+            return clipboardOfficialText.trim();
+        }
+
         let bestText = null;
         let bestTime = 0;
 
@@ -1261,6 +1270,33 @@
 
     let bannerEl = null, hideTimer = null;
 
+    function showInlineErrors(errMap) {
+        document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
+        if (!Object.keys(errMap).length) return;
+        for (const [itemName, errMsg] of Object.entries(errMap)) {
+            const item = CONFIG.items.find(it => it.name === itemName);
+            const kws = item ? item.labelKeywords : [itemName];
+            for (const kw of kws) {
+                let found = false;
+                for (const label of document.querySelectorAll('.el-form-item__label')) {
+                    if (label.textContent.trim().includes(kw)) {
+                        const content = label.nextElementSibling;
+                        if (content) {
+                            const tip = document.createElement('div');
+                            tip.className = 'suk-err-tip';
+                            tip.textContent = '⚠ ' + errMsg;
+                            tip.style.cssText = 'color:#d93025; font-size:16px; font-weight:bold; white-space:nowrap; line-height:1.3; padding:1px 0;';
+                            content.insertBefore(tip, content.firstChild);
+                            found = true;
+                        }
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+        }
+    }
+
     function showBanner(errs) {
         if (!errs.length) return hideBanner();
         if (!bannerEl) {
@@ -1277,6 +1313,7 @@
     function hideBanner() {
         if (bannerEl) { bannerEl.remove(); bannerEl = null; }
         clearTimeout(hideTimer);
+        document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
     }
 
     function check(force = false) {
@@ -1290,44 +1327,63 @@
         }
         retryCount = 0;
 
-        // IMEI查询方式：仅当报告含"保修机"字样时才进行对比
-        const bodyText = document.body.textContent || '';
-        if (/物品30天内在库质检报告/.test(bodyText) && !/保修机/.test(bodyText)) {
-            hideBanner();
-            return;
-        }
-
         const brand = getInputValueByLabel('品牌');
+        // 如果黑机遮罩存在但当前数据不是黑机，清除
+        if (document.querySelector('.qc-black-machine')) {
+            if (!brand || !/苹果|Apple/i.test(brand) || !/是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
+                document.querySelector('.qc-black-machine').remove();
+                window._qcBlackMachineTime = 0;
+            }
+        }
         // 黑机检测：同时支持"是否置换机器/黑机: 是"和"是否黑机: 是"两种格式
         if (brand && /苹果|Apple/i.test(brand) && /是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
-            showBanner(['该机型是黑机需要打掉']);
+            if (document.querySelector('.qc-black-machine')) return;
+            if (window._qcBlackMachineTime && Date.now() - window._qcBlackMachineTime < CONFIG.bannerDuration) return;
+            window._qcBlackMachineTime = Date.now();
+            const overlay = document.createElement('div');
+            overlay.className = 'qc-black-machine';
+            overlay.textContent = '该机器是黑机需要打掉';
+            overlay.style.cssText = 'position:fixed; top:4cm; left:50%; transform:translateX(-50%); z-index:999999; background:#d93025; color:#fff; padding:15px 30px; font-size:1cm; font-weight:bold; text-align:center; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+            document.body.appendChild(overlay);
+            setTimeout(() => document.querySelector('.qc-black-machine')?.remove(), CONFIG.bannerDuration);
             return;
         }
 
-        const errs = [];
+        const inlineErrs = {};
+        let hasActiveCheck = false;
         for (const it of CONFIG.items) {
             if (it.conditionalCheck) {
                 const sel = it.labelKeywords && it.labelKeywords.length ? getSelectedValue(it.labelKeywords) : null;
                 if (sel && /不涉及|不检测|跳过/i.test(sel)) continue;
                 const e = it.conditionalCheck(txt);
-                if (e) errs.push(e);
+                if (e) { inlineErrs[it.name] = e; }
+                hasActiveCheck = true;
                 continue;
             }
             let sel = getSelectedValue(it.labelKeywords);
             if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
+            hasActiveCheck = true;
             if (it.customCheck) {
                 if (it.requiredOfficialKeys && it.requiredOfficialKeys.length > 0 && !hasField(txt, it.requiredOfficialKeys)) continue;
                 const e = it.customCheck(txt, sel);
-                if (e) errs.push(e);
+                if (e) inlineErrs[it.name] = e;
                 continue;
             }
             if (it.requiredOfficialKeys && it.requiredOfficialKeys.length > 0 && !hasField(txt, it.requiredOfficialKeys)) continue;
             let terms = it.searchTransform ? (Array.isArray(it.searchTransform(sel)) ? it.searchTransform(sel) : [it.searchTransform(sel)]) : [sel];
             if (!terms.some(t => txt.toLowerCase().includes(t.toLowerCase()))) {
-                errs.push(`${it.name} 在官方信息中未找到"${sel}"，可能选错`);
+                inlineErrs[it.name] = `${it.name} 在官方信息中未找到"${sel}"，可能选错`;
             }
         }
-        errs.length > 0 ? showBanner(errs) : hideBanner();
+        const prevErrs = window._sukPrevInlineErrs || {};
+        if (JSON.stringify(prevErrs) !== JSON.stringify(inlineErrs)) {
+            if (hasActiveCheck) {
+                window._sukPrevInlineErrs = inlineErrs;
+                Object.keys(inlineErrs).length ? showInlineErrors(inlineErrs) : document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
+            }
+        } else if (hasActiveCheck && !Object.keys(inlineErrs).length && document.querySelector('.suk-err-tip')) {
+            document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
+        }
     }
 
     function addClipboardButton() {
@@ -1425,7 +1481,6 @@
         window.__checkTimer = setTimeout(() => check(true), 300);
     });
     obs.observe(document.body, {
-        childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['class', 'aria-checked']
