@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.19
+// @version      1.2.21
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -631,6 +631,66 @@
                             } else {
                                 expected = modelForMatch;
                             }
+                        }
+
+                        if (expected) {
+                            const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                            const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                            if (userNorm !== expectedNorm) {
+                                return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                            }
+                            return null;
+                        }
+                    }
+
+                    // ========== VIVO 手机 4G/5G 型号区分（根据内部型号）==========
+                    if ((/vivo|iQOO/i.test(brand) && category === '手机') && officialModelClean) {
+                        const innerModel = extractInfoLine(officialText, '内部型号');
+                        if (innerModel) {
+                            const modelLower = officialModelClean.toLowerCase();
+                            const innerUpper = innerModel.trim().toUpperCase();
+                            let expected = null;
+
+                            if (/y33s/i.test(modelLower)) {
+                                if (innerUpper === 'V2166A') expected = 'vivo Y33s（5G）';
+                                else if (innerUpper === 'V2109A') expected = 'vivo Y33s（4G）';
+                            } else if (/y55s/i.test(modelLower)) {
+                                if (innerUpper === 'V2164A') expected = 'vivo Y55s（5G）';
+                                else if (innerUpper === 'V2058A') expected = 'vivo Y55s（4G）';
+                            }
+
+                            if (expected) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                            // 有内部型号字段但没匹配到规则，不走通用逻辑？不，继续往下走
+                        }
+                    }
+
+                    // ========== OPPO 手机 4G/5G/海外版 区分（根据产品描述）==========
+                    if (/OPPO/i.test(brand) && category === '手机' && officialModelClean) {
+                        const desc = (extractInfoLine(officialText, '产品描述') || '').toLowerCase();
+                        const modelLower = officialModelClean.toLowerCase();
+                        let expected = null;
+
+                        if (/a53\b/i.test(modelLower) && !/a533g|a535g/i.test(modelLower)) {
+                            if (desc.includes('海外版') || desc.includes('海外')) expected = 'OPPO A53（海外版）';
+                            else if (desc.includes('5g')) expected = 'OPPO A53（5G）';
+                            else expected = 'OPPO A53（4G）';
+                        } else if (/reno\s*4\s*pro/i.test(modelLower)) {
+                            if (desc.includes('5g')) expected = 'OPPO Reno4 Pro（5G）';
+                            else expected = 'OPPO Reno4 Pro（4G）';
+                        } else if (/a72\b/i.test(modelLower)) {
+                            if (desc.includes('5g')) expected = 'OPPO A72（5G）';
+                            else expected = 'OPPO A72（4G）';
+                        } else if (/a57\b/i.test(modelLower)) {
+                            if (desc.includes('5g')) expected = 'OPPO A57（2022 5G）';
+                            else if (desc.includes('海外版') || desc.includes('海外')) expected = 'OPPO A57（2022 4G）';
+                            else expected = 'OPPO A57（2016）';
                         }
 
                         if (expected) {

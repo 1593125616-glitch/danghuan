@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.45
+// @version      1.7.46
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -463,10 +463,19 @@
                         if (isDomestic) {
                             // 明确为国行
                             if (isDomestic === '国行') {
+                                const availableOptions = getAvailableOptions('购买渠道');
+                                const hasDemoOption = availableOptions.includes('演示机');
+                                let shouldBeDemo = false;
                                 const isDemo = getField('是否样机/演示机');
                                 if (isDemo === '是') {
+                                    shouldBeDemo = true;
+                                } else if (!isDemo) {
+                                    const desc = getField('产品描述') || '';
+                                    if (/零售样机/i.test(desc)) shouldBeDemo = true;
+                                }
+                                if (shouldBeDemo && hasDemoOption) {
                                     if (selectedVal !== '演示机')
-                                        return `购买渠道 应为【演示机】，你选了【${selectedVal}】`;
+                                        return `购买渠道 应为【演示机】（样机），你选了【${selectedVal}】`;
                                 } else {
                                     if (selectedVal !== '大陆国行')
                                         return `购买渠道 应为【大陆国行】，你选了【${selectedVal}】`;
@@ -502,8 +511,23 @@
                         // 没有是否国行字段，检查购买地点
                         if (purchaseLocation) {
                             if (purchaseLocation === 'China') {
-                                if (selectedVal !== '大陆国行')
-                                    return `购买渠道 应为【大陆国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
+                                const availableOptions = getAvailableOptions('购买渠道');
+                                const hasDemoOption = availableOptions.includes('演示机');
+                                let shouldBeDemo = false;
+                                const isDemo = getField('是否样机/演示机');
+                                if (isDemo === '是') {
+                                    shouldBeDemo = true;
+                                } else if (!isDemo) {
+                                    const desc = getField('产品描述') || '';
+                                    if (/零售样机/i.test(desc)) shouldBeDemo = true;
+                                }
+                                if (shouldBeDemo && hasDemoOption) {
+                                    if (selectedVal !== '演示机')
+                                        return `购买渠道 应为【演示机】（样机），你选了【${selectedVal}】`;
+                                } else {
+                                    if (selectedVal !== '大陆国行')
+                                        return `购买渠道 应为【大陆国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
+                                }
                             } else {
                                 if (selectedVal !== '非国行')
                                     return `购买渠道 应为【非国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
