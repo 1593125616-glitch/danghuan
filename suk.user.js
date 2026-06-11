@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.44
+// @version      1.7.45
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -139,7 +139,7 @@
 
     function extractField(text, fieldName) {
         const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`^[ \\t]*${escaped}[：:：]\\s*(.+)$`, 'im');
+        const regex = new RegExp(`^[ \\t]*${escaped}[：:：][ \\t]*(.+)$`, 'im');
         const m = text.match(regex);
         return m ? m[1].trim() : '';
     }
@@ -453,23 +453,62 @@
                         }
 
                         let isDomestic = getField('是否国行');
-                        if (!isDomestic) {
-                            const purchaseLocation = getField('购买地点');
-                            if (purchaseLocation === 'China') isDomestic = '国行';
-                            else return null;
-                        }
-                        if (isDomestic === '国行') {
-                            const isDemo = getField('是否样机/演示机');
-                            if (isDemo === '是') {
-                                if (selectedVal !== '演示机')
-                                    return `购买渠道 应为【演示机】，你选了【${selectedVal}】`;
-                            } else {
-                                if (selectedVal !== '大陆国行')
-                                    return `购买渠道 应为【大陆国行】，你选了【${selectedVal}】`;
+                        // 是否国行为无/空白时跳过
+                        if (isDomestic && (isDomestic === '无' || isDomestic.trim() === '')) return null;
+
+                        let purchaseLocation = getField('购买地点');
+                        // 购买地点为无/空白时跳过
+                        if (!isDomestic && purchaseLocation && (purchaseLocation === '无' || purchaseLocation.trim() === '')) return null;
+
+                        if (isDomestic) {
+                            // 明确为国行
+                            if (isDomestic === '国行') {
+                                const isDemo = getField('是否样机/演示机');
+                                if (isDemo === '是') {
+                                    if (selectedVal !== '演示机')
+                                        return `购买渠道 应为【演示机】，你选了【${selectedVal}】`;
+                                } else {
+                                    if (selectedVal !== '大陆国行')
+                                        return `购买渠道 应为【大陆国行】，你选了【${selectedVal}】`;
+                                }
+                                return null;
                             }
-                        } else if (isDomestic.includes('非国行')) {
-                            if (selectedVal !== '非国行')
-                                return `购买渠道 应为【非国行】，你选了【${selectedVal}】`;
+                            // 特定国家映射→非国行
+                            if (/阿爾及利亞|英國|菲律賓/i.test(isDomestic) &&
+                                selectedVal !== '非国行') {
+                                return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
+                            }
+                            // 非国行/非大陆
+                            if (isDomestic.includes('非国行') || isDomestic.includes('非大陆')) {
+                                if (selectedVal !== '非国行')
+                                    return `购买渠道 应为【非国行】，你选了【${selectedVal}】`;
+                                return null;
+                            }
+                            // 其他非中国地区（中国台湾、中国香港、美国、日本等）→非国行
+                            if (!/中国|国行|China/i.test(isDomestic)) {
+                                const availableOptions = getAvailableOptions('购买渠道');
+                                // 有港澳台版选项就选港澳台版
+                                if (/中国台湾|中国香港|台湾|香港/.test(isDomestic) && availableOptions.includes('港澳台版')) {
+                                    if (selectedVal !== '港澳台版')
+                                        return `购买渠道 应为【港澳台版】（${isDomestic}），你选了【${selectedVal}】`;
+                                } else {
+                                    if (selectedVal !== '非国行')
+                                        return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
+                                }
+                                return null;
+                            }
+                        }
+
+                        // 没有是否国行字段，检查购买地点
+                        if (purchaseLocation) {
+                            if (purchaseLocation === 'China') {
+                                if (selectedVal !== '大陆国行')
+                                    return `购买渠道 应为【大陆国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
+                            } else {
+                                if (selectedVal !== '非国行')
+                                    return `购买渠道 应为【非国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
+                            }
+                            return null;
                         }
                     }
                     return null;
