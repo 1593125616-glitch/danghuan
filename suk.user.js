@@ -1421,7 +1421,7 @@
     function addClipboardButton() {
         const readBtn = document.createElement('button');
         readBtn.textContent = '📋 读取剪贴板信息';
-        readBtn.style.cssText = 'position:fixed; bottom:200px; right:10px; z-index:100000; height:1.5cm; min-width:3cm; padding:0 0.6cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.5cm; line-height:1.5cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
+        readBtn.style.cssText = 'position:fixed; top:4cm; right:10px; z-index:100000; height:1.5cm; min-width:3cm; padding:0 0.6cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.5cm; line-height:1.5cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
         readBtn.onclick = async () => {
             try {
                 const text = await navigator.clipboard.readText();
