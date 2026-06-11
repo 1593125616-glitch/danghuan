@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.43
+// @version      1.7.44
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -481,13 +481,13 @@
                 labelKeywords: ['保修状态', '保修', '是否在保', '保修时长', '保修剩余'],
                 customCheck: (officialText, selectedVal) => {
                     const datePatterns = [
-                        { regex: /保修到期时间[：:]\s*(.+?)(?:\n|$)/i, handler: (m) => m[1].trim() },
+                        { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
                         { regex: /预估保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
                         { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
                         { regex: /保修截止日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
                         { regex: /保修结束日期[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\s+\d{1,2}:\d{2}:\d{2})/, handler: (m) => m[1].split(' ')[0] },
                         { regex: /保修截止日期[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\s+\d{1,2}:\d{2}:\d{2})/, handler: (m) => m[1].split(' ')[0] },
-                        { regex: /保修状态[：:]\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/i, handler: (m) => `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` }
+                        { regex: /保修状态[：:]\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/i, handler: (m) => `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` },
                     ];
                     let endDate = null;
                     let warrantyStr = null;
@@ -497,6 +497,10 @@
                             warrantyStr = p.handler(m);
                             break;
                         }
+                    }
+                    // 如果找到了 warrantyStr，去掉末尾的括号备注（如"2027年10月17日（已延保）"）
+                    if (warrantyStr) {
+                        warrantyStr = warrantyStr.replace(/[（(].*[）)]$/, '').trim();
                     }
                     if (warrantyStr && /未激活/i.test(warrantyStr)) {
                         const actMatch = officialText.match(/激活日期[：:]\s*(?:已于\s*)?(\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2})/i);
