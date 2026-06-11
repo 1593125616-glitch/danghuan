@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.51
+// @version      0.57
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -379,7 +379,7 @@
                 let container = queryTitle.parentElement;
                 while (container) {
                     const text = container.innerText;
-                    if (text.includes('IMEI/SN') && text.includes('激活时间')) return container;
+                    if (text.length > 100) return container;
                     container = container.parentElement;
                 }
                 return null;
@@ -471,14 +471,15 @@
 
             /**
              * 查找结果卡片容器
-             * 尋找包含「查询结果」文字的元素，再往上找包含 IMEI 相关内容的容器
+             * 寻找包含「激活日期」文字的元素，往上找到内容容器
              */
             function findResultCard() {
-                const allElements = document.querySelectorAll('*');
                 let queryTitle = null;
-                for (const el of allElements) {
-                    if (el.textContent.trim() === '查询结果' && el.children.length === 0) {
-                        queryTitle = el;
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+                let node;
+                while (node = walker.nextNode()) {
+                    if (node.textContent.trim().includes('激活日期')) {
+                        queryTitle = node.parentElement;
                         break;
                     }
                 }
@@ -486,7 +487,7 @@
                 let container = queryTitle.parentElement;
                 while (container) {
                     const text = container.innerText;
-                    if (text.includes('IMEI码') && (text.includes('激活日期') || text.includes('SN码') || text.includes('序列号'))) return container;
+                    if (text.length > 100) return container;
                     container = container.parentElement;
                 }
                 return null;
@@ -528,7 +529,6 @@
              *   2025年12月27日
              *
              * 目标格式：
-             *   查询结果
              *   机型：Y300
              *   容量: 12G+512G
              *   颜色：青松
@@ -541,8 +541,13 @@
                 if (!container) return '';
                 const fullText = container.innerText;
 
-                // 定位起始位置
-                const startIdx = fullText.indexOf('查询结果');
+                // 定位起始位置，依次尝试多个标记
+                const startMarkers = ['查询结果', '产品信息', '机型图片仅供参考', '您的机型'];
+                let startIdx = -1;
+                for (const marker of startMarkers) {
+                    startIdx = fullText.indexOf(marker);
+                    if (startIdx !== -1) break;
+                }
                 if (startIdx === -1) return '';
 
                 // 定位结束位置（排除底部无关文字）
@@ -563,19 +568,13 @@
                 const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
                 // 跳过无关行
-                const skipWords = ['产品信息', '机型图片仅供参考', '外围图片市场参考', '外围图片，仅供参考'];
+                const skipWords = ['查询结果', '产品信息', '外围图片市场参考', '外围图片，仅供参考'];
                 const cleanLines = lines.filter(l => !skipWords.some(w => l.includes(w)));
 
                 // 逐行处理转换
                 const output = [];
                 for (let i = 0; i < cleanLines.length; i++) {
                     const line = cleanLines[i];
-
-                    // 保留「查询结果」标题
-                    if (line === '查询结果') {
-                        output.push(line);
-                        continue;
-                    }
 
                     // 处理「您的机型/机箱/配件：Y300 12G+512G」→ 机型 + 容量
                     if (/^您的(?:机型|机箱|配件)/.test(line)) {
