@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.46
+// @version      1.7.47
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -958,7 +958,7 @@
             },
             {
                 name: '激活锁（苹果全品类检测）',
-                labelKeywords: [],
+                labelKeywords: ['账号', 'ID锁', '密码及账号'],
                 conditionalCheck: (officialText) => {
                     const brand = getInputValueByLabel('品牌');
                     if (!/苹果|Apple/i.test(brand)) return null;
