@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.47
+// @version      1.7.48
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1149,6 +1149,29 @@
                     if (/功能正常|功能异常|异常|良好|检测/i.test(selected)) return null;
                     if (selected !== '核芯/集成显卡') {
                         return `显卡 应为【核芯/集成显卡】（产品描述含集显），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '网络制式（vivo智能手表）',
+                labelKeywords: ['网络制式'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/vivo|VIVO|iQOO|IQOO/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '智能手表') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const isEsim = /eSIM版/i.test(model);
+                    const isBt = /蓝牙版/i.test(model);
+                    if (!isEsim && !isBt) return null;
+                    const expected = isEsim ? 'eSIM版' : '蓝牙版';
+                    const selected = getSelectedValue(['网络制式']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `网络制式 应为【${expected}】（${model}含"${expected}"），你选了【${selected}】`;
                     }
                     return null;
                 },
