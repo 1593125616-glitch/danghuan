@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.50
+// @version      0.51
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -131,7 +131,7 @@
     const host = location.hostname;
 
     // ==================== ybcheck.com ====================
-    if (host.includes('ybcheck.com')) {
+    if (host.includes('ybcheck.com') || host.includes('57306.com')) {
         (function() {
             const MAX_WAIT = 180000;
             const COPY_BTN_DELAY = 1500;   // 延迟后开始检查复制
