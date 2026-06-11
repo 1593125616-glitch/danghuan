@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.57
+// @version      0.59
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -418,7 +418,7 @@
                     const clean = line.replace(/[：:]\s*$/, '');
                     if (!line.includes(':') && i + 1 < merged.length && merged[i + 1].startsWith('(')) {
                         finalLines.push('型号:' + clean);
-                        finalLines.push('容量:' + merged[i + 1]);
+                        finalLines.push('容量:' + merged[i + 1].replace(/^\(|\)$/g, ''));
                         i++;
                         continue;
                     }
@@ -498,14 +498,14 @@
              * 容量格式为 xxG+xxxG（如 12G+512G）或 xxG+xxxGB
              */
             function parseModelCapacity(text) {
-                // 匹配末尾容量格式：数字G+数字G 或 数字G+数字GB
-                const capMatch = text.match(/\s+(\d+G\+\d+GB?)\s*$/);
+                // 匹配末尾容量格式：8GB+256GB, 8G+256G, 12GB+256GB 等
+                const capMatch = text.match(/\s+(\d+GB?)\+(\d+GB?)\s*$/);
                 if (capMatch) {
                     const model = text.substring(0, capMatch.index).trim();
-                    return { model, capacity: capMatch[1] };
+                    return { model, capacity: capMatch[1] + '+' + capMatch[2] };
                 }
-                // 兼容纯 G 结尾（如 256G）
-                const capMatch2 = text.match(/\s+(\d+G)\s*$/);
+                // 兼容纯 GB/G 结尾（如 256GB, 256G）
+                const capMatch2 = text.match(/\s+(\d+GB?)\s*$/);
                 if (capMatch2) {
                     const model = text.substring(0, capMatch2.index).trim();
                     return { model, capacity: capMatch2[1] };
@@ -530,7 +530,7 @@
              *
              * 目标格式：
              *   机型：Y300
-             *   容量: 12G+512G
+             *   容量：12G+512G
              *   颜色：青松
              *   IMEI码：861114076902532
              *   SN码：10AG5D2A61009DK
@@ -582,7 +582,7 @@
                         const rest = colonIdx !== -1 ? line.substring(colonIdx + 1).trim() : line.replace('您的机型', '').trim();
                         const { model, capacity } = parseModelCapacity(rest);
                         if (model) output.push(`机型：${model}`);
-                        if (capacity) output.push(`容量: ${capacity}`);
+                        if (capacity) output.push(`容量：${capacity}`);
                         continue;
                     }
 
