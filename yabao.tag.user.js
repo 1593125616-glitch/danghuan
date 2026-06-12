@@ -9,8 +9,8 @@
 // @match        https://support.oppo.com/*
 // @match        https://support.vivo.com.cn/*
 // @grant        GM_setClipboard
-// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.user.js
-// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.tag.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.tag.user.js
 // ==/UserScript==
 
 (function() {
