@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.51
+// @version      1.7.52
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -267,6 +267,12 @@
                             return `颜色 应为【深空灰】（官方为灰色），你选了【${selectedVal}】`;
                         }
                         return null;
+                    }
+
+                    // 小米智能手表：薄荷绿 兼容 绿色
+                    if (/小米|Redmi|红米/i.test(brand) && category === '智能手表' && /薄荷绿/i.test(officialColor)) {
+                        if (/^(绿色|薄荷绿)$/.test(normalizedSelected)) return null;
+                        return `颜色 应为【薄荷绿或绿色】（官方为薄荷绿），你选了【${selectedVal}】`;
                     }
 
                     if (!/^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) {

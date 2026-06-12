@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.22
+// @version      1.2.23
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -435,6 +435,10 @@
                         if (modelMatch && modelMatch[1].trim()) {
                             let raw = modelMatch[1].trim();
                             raw = forceTruncateAtKeywords(raw);
+                            if (/小米|Xiaomi|Redmi|红米/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                                const mmTrunc = raw.match(/^(.+?\d+\s*mm)/i);
+                                if (mmTrunc) raw = mmTrunc[1];
+                            }
                             raw = cleanModelString(raw);
                             if (/苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
                                 const lastParen = raw.lastIndexOf(')');
@@ -831,7 +835,7 @@
         raw = raw.replace(/\d+\s*(GB|TB)\s*\+\s*\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s+\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s*/gi, ' ');
         raw = raw.replace(/\d+(\.\d+)?\s*吋/gi, ' ');
         raw = raw.replace(/\s*星宇橙色\s*/gi, ' ').replace(/\s*钛金属\s*/gi, ' ');
-        const colorPattern = /[\s]*(?:黑色|白色|蓝色|金色|银色|绿色|红色|紫色|灰色|粉色|棕色|曜石黑|亮黑色|星河银|魅影黑|雅黑色|月光白|星野黑|远峰蓝|苍岭绿|暗紫色|深空黑色|银色|金色|远峰蓝色|蓝色|绿色|红色|紫色|灰色|粉色|棕色|黄|青|橙|曜金黑|石墨烯•夜|大溪地灰|羽砂黑|翡冷翠|羽砂白|樱粉金|可可茶金|釉白色|丹霞橙|青山黛|赤茶橘|雪域白|月光香槟|星夜银|薄荷青|原色|沙漠色|雾|薰衣草|鼠尾草|黑配碳|白配银|珊瑚色|玫瑰金色|暗夜|海蓝色|远峰|深空)\s*/gi;
+        const colorPattern = /[\s]*(?:黑色|白色|蓝色|金色|银色|绿色|红色|紫色|灰色|粉色|棕色|曜石黑|亮黑色|星河银|魅影黑|雅黑色|月光白|星野黑|远峰蓝|苍岭绿|暗紫色|深空黑色|银色|金色|远峰蓝色|蓝色|绿色|红色|紫色|灰色|粉色|棕色|曜金黑|石墨烯•夜|大溪地灰|羽砂黑|翡冷翠|羽砂白|樱粉金|可可茶金|釉白色|丹霞橙|青山黛|赤茶橘|雪域白|月光香槟|星夜银|薄荷青|原色|沙漠色|雾|薰衣草|鼠尾草|黑配碳|白配银|珊瑚色|玫瑰金色|暗夜|海蓝色|远峰|深空)\s*/gi;
         raw = raw.replace(colorPattern, ' ');
         raw = raw.replace(/华为官翻机|官翻机|官换机/gi, ' ').replace(/全成色|成色/gi, ' ').replace(/\b激活锁\b/g, ' ');
         raw = raw.replace(/\s*素皮版\s*/g, ' ').replace(/\s*昆仑玻璃\s*/g, ' ').replace(/\s*三星商城专属颜色\s*/gi, ' ').replace(/\s*蓝牙版\s*/gi, ' ').replace(/\s*乐臻版\s*/gi, ' ').replace(/\s*小米折叠屏手机\s*/gi, ' ');
@@ -870,6 +874,10 @@
         if (modelMatch && modelMatch[1].trim()) {
             let raw = modelMatch[1].trim();
             raw = forceTruncateAtKeywords(raw);
+            if (/小米|Xiaomi|Redmi|红米/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                const mmTrunc = raw.match(/^(.+?\d+\s*mm)/i);
+                if (mmTrunc) raw = mmTrunc[1];
+            }
             raw = cleanModelString(raw);
             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                 raw = cleanAppleWatchModel(raw);
