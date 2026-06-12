@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.25
+// @version      1.2.30
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -257,6 +257,54 @@
         'galaxy tab a7': '三星 Galaxy Tab A7 10.4 2020款',
     };
 
+    const lenovoTabletModelMapping = {
+        '小新pad plus': '联想 小新 Pad Plus 11英寸',
+        '小新pad pro 2020': '联想 小新 Pad Pro 11.5英寸 2020款',
+        '小新pad pro 12.7骁龙版': '联想 小新 Pad Pro 12.7英寸2023（骁龙版）',
+        '小新pad 2022': '联想 小新 Pad 10.6英寸 2022款',
+        '小新pad pro 12.7天玑版': '联想 小新 Pad Pro 12.7英寸 2023（天玑版）',
+        '小新pad pro 12.7二代': '联想 小新 Pad Pro 12.7英寸 2025款',
+        '拯救者 y700 超控版': '联想 拯救者 Y700 三代 8.8英寸 2025款（超控版）',
+    };
+
+    const lenovoInternalModelMapping = {
+        'tb-j716f': '联想 小新 Pad Pro 11.5英寸 2021款',
+        'tb-j716n': '联想 小新 Pad Pro 12.6英寸 2021款',
+    };
+
+    const lenovoProductDescMapping = {
+        'tb321fu': '联想 拯救者 Y700 三代 8.8英寸 2025款',
+        'tb-9707f': '联想 拯救者 Y700 8.8英寸 2022款',
+        'tb320fc': '联想 拯救者 Y700 8.8英寸 2023款',
+        'tb322fc': '联想 拯救者 Y700 四代 8.8英寸',
+        'tb323fu': '联想 拯救者 Y700 五代 8.8英寸',
+    };
+
+    function mapLenovoTabletModel(cleanedModel, officialText) {
+        const key = cleanedModel.toLowerCase().replace(/\s+/g, '').trim();
+        for (const [kw, mapped] of Object.entries(lenovoTabletModelMapping)) {
+            const kwClean = kw.replace(/\s+/g, '');
+            if (key.includes(kwClean)) return mapped;
+            const segments = kw.toLowerCase().split(/\s+/).filter(Boolean);
+            if (segments.length > 1 && segments.every(s => key.includes(s))) return mapped;
+        }
+        const descLine = extractInfoLine(officialText, '产品描述') || '';
+        const descLower = descLine.toLowerCase();
+        // 拯救者 Y700：先确认型号含"拯救者y700"或"拯救者平板y700"，再根据产品描述中的 TB 代码区分代际
+        if (key.includes('拯救者y700') || key.includes('拯救者平板y700')) {
+            for (const [code, mapped] of Object.entries(lenovoProductDescMapping)) {
+                if (descLower.includes(code)) return mapped;
+            }
+        }
+        // 小新 Pad Pro 2021：先确认型号含"小新padpro2021"，再根据产品描述中的 TB 代码区分
+        if (key.includes('小新padpro2021')) {
+            for (const [code, mapped] of Object.entries(lenovoInternalModelMapping)) {
+                if (descLower.includes(code)) return mapped;
+            }
+        }
+        return null;
+    }
+
     function isStrictProductDescBrand(brand) {
         return /OPPO|一加|真我|realme/i.test(brand);
     }
@@ -367,6 +415,9 @@
         t = t.replace(/款/g, '版');
         t = replaceChineseNumerals(t);
         t = t.replace(/^(苹果|apple|华为|huawei|小米|xiaomi|红米|redmi|三星|samsung|oppo|vivo|真我|realme|一加|oneplus|荣耀|honor|魅族|meizu|努比亚|nubia|联想|lenovo|摩托罗拉|motorola|索尼|sony|谷歌|google|诺基亚|nokia)\s*/i, '');
+        // Nubia = 努比亚, Red Magic = 红魔
+        t = t.replace(/nubia/gi, '努比亚');
+        t = t.replace(/red\s*magic/gi, '红魔');
         // 盖乐世 等同于 Galaxy
         t = t.replace(/盖乐世/gi, 'Galaxy');
         // 至尊 等同于 至尊版
@@ -439,9 +490,16 @@
                     let officialModelClean = null;
                     if (clipboardText && officialText === clipboardText) {
                         const color = getSelectedColor(), storage = getSelectedStorage();
-                        let modelMatch = officialText.match(/^:?型号[：:]\s*(.+)$/im) || officialText.match(/^机型[：:]\s*(.+)$/im);
+                        let modelMatch = null;
+                        if (/努比亚|Nubia|红魔|Redmagic/i.test(brand)) {
+                            modelMatch = officialText.match(/^机器名称[：:]\s*(.+)$/im) || officialText.match(/^机型名称[：:]\s*(.+)$/im);
+                        }
+                        if (!modelMatch) modelMatch = officialText.match(/^:?型号[：:]\s*(.+)$/im) || officialText.match(/^机型[：:]\s*(.+)$/im);
                         if (modelMatch && modelMatch[1].trim()) {
                             let raw = modelMatch[1].trim();
+                            if (/努比亚|Nubia|红魔|Redmagic/i.test(brand)) {
+                                raw = raw.replace(/\bNubia\b/gi, '努比亚').replace(/\bRed\s*Magic\b/gi, '红魔').replace(/\bREDMAGIC\b/gi, '红魔');
+                            }
                             raw = forceTruncateAtKeywords(raw);
                             if (/小米|Xiaomi|Redmi|红米/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 const mmTrunc = raw.match(/^(.+?\d+\s*mm)/i);
@@ -463,6 +521,9 @@
                             }
                             if (/三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                                 raw = raw.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
+                            }
+                            if (/联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                                raw = raw.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
                             }
                             if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                                 raw = cleanAppleAirPodsModel(raw);
@@ -489,6 +550,9 @@
                         }
                         if (officialModelClean && /三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                             officialModelClean = officialModelClean.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
+                        }
+                        if (officialModelClean && /联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                            officialModelClean = officialModelClean.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
                         }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                             officialModelClean = cleanAppleAirPodsModel(officialModelClean);
@@ -749,6 +813,15 @@
                         }
                     }
 
+                    // 联想平板特殊型号映射
+                    if (/联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        const mapped = mapLenovoTabletModel(officialModelClean, officialText);
+                        if (mapped) {
+                            if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
+                        }
+                    }
+
                     if (/苹果|Apple/i.test(brand) && category === '手机') {
                         const normalizeApple = (s) => s.toLowerCase().replace(/苹果|apple/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
                         if (normalizeApple(officialModelClean) === normalizeApple(selectedVal)) return null;
@@ -899,10 +972,17 @@
     }
 
     function extractOfficialModel(text, brand, category) {
-        let modelMatch = text.match(/^机型[：:]\s*(.+)$/im);
+        let modelMatch = null;
+        if (/努比亚|Nubia|红魔|Redmagic/i.test(brand)) {
+            modelMatch = text.match(/^机器名称[：:]\s*(.+)$/im) || text.match(/^机型名称[：:]\s*(.+)$/im);
+        }
+        if (!modelMatch) modelMatch = text.match(/^机型[：:]\s*(.+)$/im);
         if (!modelMatch) modelMatch = text.match(/^:?型号[：:]\s*(.+)$/im);
         if (modelMatch && modelMatch[1].trim()) {
             let raw = modelMatch[1].trim();
+            if (/努比亚|Nubia|红魔|Redmagic/i.test(brand)) {
+                raw = raw.replace(/\bNubia\b/gi, '努比亚').replace(/\bRed\s*Magic\b/gi, '红魔').replace(/\bREDMAGIC\b/gi, '红魔');
+            }
             raw = forceTruncateAtKeywords(raw);
             if (/小米|Xiaomi|Redmi|红米/i.test(brand) && (category === '手表' || category === '智能手表')) {
                 const mmTrunc = raw.match(/^(.+?\d+\s*mm)/i);
@@ -920,6 +1000,9 @@
             }
             if (/三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                 raw = raw.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
+            }
+            if (/联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                raw = raw.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
             }
             return raw || null;
         }

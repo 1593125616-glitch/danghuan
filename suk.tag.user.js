@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.56
+// @version      1.7.58
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -297,6 +297,7 @@
                     const brand = getInputValueByLabel('品牌');
                     const category = getInputValueByLabel('品类');
                     if (category === '笔记本' || category === '电脑') return null;
+                    if (/魅族|Meizu/i.test(brand)) return null;
                     function normalizeStorage(str) {
                         const comboMatch = str.match(/^(\d+)\s*(GB|G|TB|T)?\s*\+\s*(\d+)\s*(GB|G|TB|T)?$/i);
                         if (comboMatch) {
@@ -482,6 +483,24 @@
                                             return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
                                         return null;
                                     }
+                                }
+                            }
+                        }
+
+                        // 联想平板购买渠道检测（通过版本字段）
+                        if (/联想|Lenovo/i.test(brand)) {
+                            const lenovoCategory = getInputValueByLabel('品类');
+                            if (lenovoCategory === '平板' || lenovoCategory === '平板电脑' || lenovoCategory === 'Pad') {
+                                const versionField = getField('版本');
+                                if (versionField && versionField.trim() !== '') {
+                                    if (/国行/i.test(versionField)) {
+                                        if (selectedVal !== '大陆国行')
+                                            return `购买渠道 应为【大陆国行】（版本：${versionField}），你选了【${selectedVal}】`;
+                                    } else {
+                                        if (selectedVal !== '非国行')
+                                            return `购买渠道 应为【非国行】（版本：${versionField}），你选了【${selectedVal}】`;
+                                    }
+                                    return null;
                                 }
                             }
                         }
