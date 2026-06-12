@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.23
+// @version      1.2.25
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -251,6 +251,12 @@
         'airpods 4': '苹果 AirPods 4代（不支持主动降噪）',
     };
 
+    // ========== 三星平板映射表 ==========
+    const samsungTabletModelMapping = {
+        'galaxy tab s6 lite 10.4英寸': '三星 Galaxy Tab S6 Lite',
+        'galaxy tab a7': '三星 Galaxy Tab A7 10.4 2020款',
+    };
+
     function isStrictProductDescBrand(brand) {
         return /OPPO|一加|真我|realme/i.test(brand);
     }
@@ -361,6 +367,8 @@
         t = t.replace(/款/g, '版');
         t = replaceChineseNumerals(t);
         t = t.replace(/^(苹果|apple|华为|huawei|小米|xiaomi|红米|redmi|三星|samsung|oppo|vivo|真我|realme|一加|oneplus|荣耀|honor|魅族|meizu|努比亚|nubia|联想|lenovo|摩托罗拉|motorola|索尼|sony|谷歌|google|诺基亚|nokia)\s*/i, '');
+        // 盖乐世 等同于 Galaxy
+        t = t.replace(/盖乐世/gi, 'Galaxy');
         // 至尊 等同于 至尊版
         t = t.replace(/至尊(?!版)/g, '至尊版');
         t = t.replace(/\s+/g, '');
@@ -450,6 +458,12 @@
                             if (/OPPO/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版/gi, ' ').replace(/\s+/g, ' ').trim();
                             }
+                            if (/三星|Samsung/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                                raw = raw.replace(/Bespoke\s*蓝牙\/?/gi, ' ').replace(/\s*版\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+                            }
+                            if (/三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                                raw = raw.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
+                            }
                             if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                                 raw = cleanAppleAirPodsModel(raw);
                             }
@@ -469,6 +483,12 @@
                         }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                             officialModelClean = cleanAppleWatchModel(officialModelClean);
+                        }
+                        if (officialModelClean && /三星|Samsung/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                            officialModelClean = officialModelClean.replace(/Bespoke\s*蓝牙\/?/gi, ' ').replace(/\s*版\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+                        }
+                        if (officialModelClean && /三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                            officialModelClean = officialModelClean.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
                         }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                             officialModelClean = cleanAppleAirPodsModel(officialModelClean);
@@ -719,12 +739,22 @@
                         }
                     }
 
+                    // 三星平板特殊型号映射
+                    if (/三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim();
+                        const mapped = samsungTabletModelMapping[key];
+                        if (mapped) {
+                            if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${mapped}】，你选了【${selectedVal}】`;
+                        }
+                    }
+
                     if (/苹果|Apple/i.test(brand) && category === '手机') {
                         const normalizeApple = (s) => s.toLowerCase().replace(/苹果|apple/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
                         if (normalizeApple(officialModelClean) === normalizeApple(selectedVal)) return null;
                     }
                     if (/三星/i.test(brand)) {
-                        const normalize = (s) => s.toLowerCase().replace(/三星商城专属(颜色)?/gi, '').replace(/三星|samsung/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
+                        const normalize = (s) => s.toLowerCase().replace(/盖乐世/gi, 'Galaxy').replace(/三星商城专属(颜色)?/gi, '').replace(/三星|samsung/gi, '').replace(/[（(]\s*[54]G\s*[）)]/gi, '').replace(/\s+/g, '');
                         if (normalize(officialModelClean) === normalize(selectedVal)) return null;
                     }
                     if (/真我|realme/i.test(brand)) {
@@ -829,7 +859,7 @@
         raw = raw.replace(/Wi-Fi/gi, ' ');
         raw = raw.replace(/WIFI/gi, ' ');
         raw = raw.replace(/移动网络/gi, ' ');
-        raw = raw.replace(/LTE|eSIM\s*版/gi, ' ').replace(/[（(]\s*eSIM\s*[）)]/gi, ' ').replace(/[（(]\s*蓝牙\s*[）)]/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
+        raw = raw.replace(/eSIM\s*版/gi, ' ').replace(/[（(]\s*LTE\s*[）)]/gi, ' ').replace(/[（(]\s*eSIM\s*[）)]/gi, ' ').replace(/[（(]\s*蓝牙\s*[）)]/gi, ' ').replace(/\bLTE\b/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
         raw = raw.replace(/鸿蒙NEXT先锋版|先锋版|NEXT先锋版/gi, ' ');
         raw = raw.replace(/\b\d+mm\b/gi, ' ');
         raw = raw.replace(/\d+\s*(GB|TB)\s*\+\s*\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s+\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s*/gi, ' ');
@@ -884,6 +914,12 @@
             }
             if (/OPPO/i.test(brand) && (category === '手表' || category === '智能手表')) {
                 raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版/gi, ' ').replace(/\s+/g, ' ').trim();
+            }
+            if (/三星|Samsung/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                raw = raw.replace(/Bespoke\s*蓝牙\/?/gi, ' ').replace(/\s*版\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+            }
+            if (/三星|Samsung/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                raw = raw.replace(/盖乐世/gi, 'Galaxy').replace(/WLAN/gi, ' ').replace(/[（(]\s*[）)]/gi, ' ').replace(/3G版/gi, ' ').replace(/\s+/g, ' ').trim();
             }
             return raw || null;
         }

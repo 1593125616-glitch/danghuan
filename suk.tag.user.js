@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.52
+// @version      1.7.56
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -320,7 +320,7 @@
 
                     // 优先从"容量:"字段提取
                     const capField = extractField(officialText, '容量') || extractField(officialText, '存储容量');
-                    if (capField) {
+                    if (capField && !/定制内存|样机内存/i.test(capField)) {
                         const normalizedField = normalizeStorage(capField);
                         const stdSelected = normalizeStorage(selectedVal);
                         if (normalizedField.toLowerCase() === stdSelected.toLowerCase()) return null;
@@ -456,6 +456,34 @@
                         if (purchaseChannel) {
                             if (selectedVal === purchaseChannel) return null;
                             else return `购买渠道 应为【${purchaseChannel}】，你选了【${selectedVal}】`;
+                        }
+
+                        // 三星手机购买渠道检测
+                        if (/三星|Samsung/i.test(brand)) {
+                            const samsungCategory = getInputValueByLabel('品类');
+                            if (samsungCategory === '手机') {
+                                let isDomestic = getField('是否国行');
+                                if (isDomestic && isDomestic !== '无' && isDomestic.trim() !== '') {
+                                    if (isDomestic === '国行') {
+                                        const machineType = getField('机器类型');
+                                        if (machineType && /演示机/i.test(machineType)) {
+                                            if (selectedVal !== '演示机')
+                                                return `购买渠道 应为【演示机】（机器类型含演示机），你选了【${selectedVal}】`;
+                                            return null;
+                                        }
+                                    }
+                                    if (/中国香港版（非国行）|中国台湾版（非国行）/.test(isDomestic)) {
+                                        if (selectedVal !== '港澳台版')
+                                            return `购买渠道 应为【港澳台版】（${isDomestic}），你选了【${selectedVal}】`;
+                                        return null;
+                                    }
+                                    if (isDomestic !== '国行') {
+                                        if (selectedVal !== '非国行')
+                                            return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
+                                        return null;
+                                    }
+                                }
+                            }
                         }
 
                         let isDomestic = getField('是否国行');
@@ -1269,6 +1297,55 @@
                     if (!selected || /不检测|跳过/i.test(selected)) return null;
                     if (selected !== expected) {
                         return `网络制式 应为【${expected}】（${model}含"${expected}"），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '网络制式（三星智能手表）',
+                labelKeywords: ['网络制式'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/三星|Samsung/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '智能手表') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const isLte = /LTE/i.test(model);
+                    const isBt = /蓝牙/i.test(model);
+                    if (!isLte && !isBt) return null;
+                    const expected = isLte ? 'LTE版' : '蓝牙版';
+                    const selected = getSelectedValue(['网络制式']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `网络制式 应为【${expected}】（${model}含"${expected}"），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '网络制式（三星平板）',
+                labelKeywords: ['网络制式'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/三星|Samsung/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '平板') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const has5g = /\b5G\b/i.test(model);
+                    const hasLte = /\bLTE\b/i.test(model);
+                    const hasWifi = /Wi[-\s]?Fi|WiFi/i.test(model);
+                    const has3g = /3G版/i.test(model);
+                    const has4g = /\b4G\b/i.test(model);
+                    if (!has5g && !hasLte && !hasWifi && !has3g && !has4g) return null;
+                    const expected = has5g ? 'WIFI+5G版' : (hasLte || has3g || has4g) ? 'WIFI+4G版' : 'WIFI版';
+                    const selected = getSelectedValue(['网络制式']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `网络制式 应为【${expected}】（${model}含对应关键词），你选了【${selected}】`;
                     }
                     return null;
                 },
