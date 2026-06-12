@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.58
+// @version      1.7.60
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -483,6 +483,20 @@
                                             return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
                                         return null;
                                     }
+                                }
+                            }
+                        }
+
+                        // 小米/红米：国行或购买地点为 China 时，检测是否展示机
+                        if (/小米|Redmi|红米/i.test(brand)) {
+                            const miIsDomestic = getField('是否国行');
+                            const miPurchaseLocation = getField('购买地点');
+                            if ((!miIsDomestic || miIsDomestic === '国行') && miPurchaseLocation === 'China') {
+                                const isShowMachine = getField('是否展示机');
+                                if (isShowMachine === '是') {
+                                    if (selectedVal !== '演示机')
+                                        return `购买渠道 应为【演示机】（是否展示机：是），你选了【${selectedVal}】`;
+                                    return null;
                                 }
                             }
                         }

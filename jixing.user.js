@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.30
+// @version      1.2.32
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -385,7 +385,7 @@
         if (!val) return '';
         let cleaned = val;
         cleaned = cleaned.replace(/触控笔/gi, '');
-        cleaned = cleaned.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
+        cleaned = cleaned.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机|键盘式双面保护壳/gi, ' ');
         cleaned = cleaned.replace(/\(\s*USB-C\s*\)/gi, ' ');
         cleaned = cleaned.replace(/全网通/gi, '');
         cleaned = cleaned.replace(/[（(]\s*[54]G\s*[）)]/gi, ' ');
@@ -414,6 +414,8 @@
         let t = str.replace(/[（(]/g, '').replace(/[）)]/g, '');
         t = t.replace(/款/g, '版');
         t = replaceChineseNumerals(t);
+        // 平板 等同于 Pad
+        t = t.replace(/平板/gi, 'Pad');
         t = t.replace(/^(苹果|apple|华为|huawei|小米|xiaomi|红米|redmi|三星|samsung|oppo|vivo|真我|realme|一加|oneplus|荣耀|honor|魅族|meizu|努比亚|nubia|联想|lenovo|摩托罗拉|motorola|索尼|sony|谷歌|google|诺基亚|nokia)\s*/i, '');
         // Nubia = 努比亚, Red Magic = 红魔
         t = t.replace(/nubia/gi, '努比亚');
@@ -525,6 +527,9 @@
                             if (/联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                                 raw = raw.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
                             }
+                            if (/小米|Xiaomi|Redmi|红米/i.test(brand)) {
+                                raw = raw.replace(/双卫星通信|3\.2GHz|12\.4|12\.5/gi, ' ').replace(/\s+/g, ' ').trim();
+                            }
                             if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                                 raw = cleanAppleAirPodsModel(raw);
                             }
@@ -553,6 +558,9 @@
                         }
                         if (officialModelClean && /联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                             officialModelClean = officialModelClean.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
+                        }
+                        if (officialModelClean && /小米|Xiaomi|Redmi|红米/i.test(brand)) {
+                            officialModelClean = officialModelClean.replace(/双卫星通信|3\.2GHz|12\.4|12\.5/gi, ' ').replace(/\s+/g, ' ').trim();
                         }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                             officialModelClean = cleanAppleAirPodsModel(officialModelClean);
@@ -948,7 +956,7 @@
         // 去除 AI版（含空格或不含空格）
         raw = raw.replace(/AI\s*版/gi, ' ');
         raw = raw.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
-        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机/gi, ' ');
+        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机|键盘式双面保护壳/gi, ' ');
         raw = raw.replace(/\(\s*USB-C\s*\)/gi, ' ');
         const fns = ['SKU型号', 'skuId', '品牌', '入网型号', '供应型号', '支持网络', '是否激活', '维修记录', '是否演示机', '是否官方二手机', '是否官翻机', '是否零售机', '是否购买了华为care', '是否空中激活', '激活日期', '国家版本', '是否在保', '保修模式', '保修结束日期', '是否官换机', '是否个性化定制', '屏幕尺寸', 'CPU', '商品属性', '是否自营渠道购买', '内存', '颜色', '零件描述'];
         for (const f of fns) { const i = raw.indexOf(f); if (i !== -1) { raw = raw.substring(0, i).trim(); break; } }
@@ -1003,6 +1011,9 @@
             }
             if (/联想|Lenovo/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                 raw = raw.replace(/[（(][^）)]*[）)]/gi, ' ').replace(/\s+/g, ' ').trim();
+            }
+            if (/小米|Xiaomi|Redmi|红米/i.test(brand)) {
+                raw = raw.replace(/双卫星通信|3\.2GHz|12\.4|12\.5/gi, ' ').replace(/\s+/g, ' ').trim();
             }
             return raw || null;
         }
