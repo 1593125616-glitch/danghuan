@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.21
+// @version      1.2.22
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -443,6 +443,9 @@
                             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 raw = cleanAppleWatchModel(raw);
                             }
+                            if (/OPPO/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                                raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版/gi, ' ').replace(/\s+/g, ' ').trim();
+                            }
                             if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                                 raw = cleanAppleAirPodsModel(raw);
                             }
@@ -822,7 +825,7 @@
         raw = raw.replace(/Wi-Fi/gi, ' ');
         raw = raw.replace(/WIFI/gi, ' ');
         raw = raw.replace(/移动网络/gi, ' ');
-        raw = raw.replace(/LTE|eSIM\s*版/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
+        raw = raw.replace(/LTE|eSIM\s*版/gi, ' ').replace(/[（(]\s*eSIM\s*[）)]/gi, ' ').replace(/[（(]\s*蓝牙\s*[）)]/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
         raw = raw.replace(/鸿蒙NEXT先锋版|先锋版|NEXT先锋版/gi, ' ');
         raw = raw.replace(/\b\d+mm\b/gi, ' ');
         raw = raw.replace(/\d+\s*(GB|TB)\s*\+\s*\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s+\d+\s*(GB|TB)/gi, ' ').replace(/\d+\s*(GB|TB)\s*/gi, ' ');
@@ -870,6 +873,9 @@
             raw = cleanModelString(raw);
             if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
                 raw = cleanAppleWatchModel(raw);
+            }
+            if (/OPPO/i.test(brand) && (category === '手表' || category === '智能手表')) {
+                raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版/gi, ' ').replace(/\s+/g, ' ').trim();
             }
             return raw || null;
         }

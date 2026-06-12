@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.48
+// @version      1.7.51
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1166,6 +1166,97 @@
                     if (!model) return null;
                     const isEsim = /eSIM版/i.test(model);
                     const isBt = /蓝牙版/i.test(model);
+                    if (!isEsim && !isBt) return null;
+                    const expected = isEsim ? 'eSIM版' : '蓝牙版';
+                    const selected = getSelectedValue(['网络制式']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `网络制式 应为【${expected}】（${model}含"${expected}"），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '表盘尺寸（智能手表）',
+                labelKeywords: ['表盘尺寸'],
+                conditionalCheck: (officialText) => {
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '智能手表') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    let mmMatch = null;
+                    if (model) {
+                        const clean = model.replace(/[""]/g, '');
+                        mmMatch = clean.match(/(\d{2})\s*mm/i);
+                    }
+                    if (!mmMatch) {
+                        mmMatch = officialText.match(/(\d{2})\s*mm/i);
+                    }
+                    if (!mmMatch) return null;
+                    const expected = mmMatch[1] + '毫米';
+                    const selected = getSelectedValue(['表盘尺寸']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `表盘尺寸 应为【${expected}】（信息含"${mmMatch[0]}"），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '版本（OPPO智能手表）',
+                labelKeywords: ['版本'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/OPPO/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '智能手表') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const suffixMap = {
+                        '理想汽车定制版': '理想汽车商城专供版',
+                        'ECG版': 'ECG版',
+                        '名侦探柯南限定版': '名侦探柯南限定版',
+                        '精钢版': '精钢版',
+                        '故宫新禧版': '故宫新禧版',
+                        '英雄联盟限定版': '英雄联盟限定版',
+                        'EVA限定版': 'EVA限定版',
+                        'NFC版': 'NFC版',
+                        '高尔夫定制版': '高尔夫定制版',
+                        'MG汽车定制版': 'MG汽车定制版',
+                    };
+                    let matched = null;
+                    for (const [suffix, expected] of Object.entries(suffixMap)) {
+                        if (model.includes(suffix)) {
+                            matched = expected;
+                            break;
+                        }
+                    }
+                    if (!matched) matched = '标准版';
+                    const selected = getSelectedValue(['版本']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== matched) {
+                        if (matched === '标准版') {
+                            return `版本 应为【标准版】（型号无定制版后缀），你选了【${selected}】`;
+                        }
+                        return `版本 应为【${matched}】（型号含"${matched}"），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '网络制式（OPPO智能手表）',
+                labelKeywords: ['网络制式'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/OPPO/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '智能手表') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const isEsim = /\beSIM\b/i.test(model) || /[（(]\s*eSIM\s*[）)]/i.test(model);
+                    const isBt = /蓝牙/i.test(model);
                     if (!isEsim && !isBt) return null;
                     const expected = isEsim ? 'eSIM版' : '蓝牙版';
                     const selected = getSelectedValue(['网络制式']);
