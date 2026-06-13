@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.61
+// @version      1.7.62
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1723,6 +1723,9 @@
                 document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
             }
             showBottomPopup(inlineErrs);
+            if (hasActiveCheck && clipboardOfficialText) {
+                Object.keys(inlineErrs).length === 0 ? showNoAnomalyMessage() : hideNoAnomalyMessage();
+            }
         } catch (e) {
             console.error('[质检] check 异常:', e);
         }
@@ -1773,6 +1776,19 @@
         }, 2000);
     }
 
+    function showNoAnomalyMessage() {
+        hideNoAnomalyMessage();
+        const div = document.createElement('div');
+        div.className = 'suk-no-anomaly';
+        div.textContent = '✅ 对比无异常';
+        div.style.cssText = 'position:fixed; top:80px; right:10px; z-index:100001; padding:8px 12px; background:#34c759; color:#fff; border-radius:4px; font-size:14px; box-shadow:0 2px 6px rgba(0,0,0,0.3);';
+        document.body.appendChild(div);
+    }
+
+    function hideNoAnomalyMessage() {
+        document.querySelectorAll('.suk-no-anomaly').forEach(el => el.remove());
+    }
+
     // ==================== 监听"开始检测"或"提交"按钮，清空所有对比缓存 ====================
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
@@ -1790,6 +1806,7 @@
             }
             tableVirtualContainer = null;
             hideBanner();
+            hideNoAnomalyMessage();
             retryCount = 0;
             console.log('[质检高亮] 已清空对比数据，等待新查询结果');
         }
