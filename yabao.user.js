@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.60
+// @version      0.61
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -49,6 +49,18 @@
     // ==================== 通用工具 ====================
     const DEBUG = true;
     function log(...args) { if (DEBUG) console.log('[啞寶腳本]', ...args); }
+
+    function showToast(msg) {
+        const div = document.createElement('div');
+        div.textContent = msg;
+        div.style.cssText = 'position:fixed; top:3cm; left:50%; transform:translateX(-50%); z-index:888888; background:#333; color:#fff; padding:10px 20px; border-radius:6px; font-size:16px; box-shadow:0 2px 8px rgba(0,0,0,0.3); opacity:0; transition:opacity 0.3s;';
+        document.body.appendChild(div);
+        requestAnimationFrame(() => div.style.opacity = '1');
+        setTimeout(() => {
+            div.style.opacity = '0';
+            setTimeout(() => div.remove(), 300);
+        }, 2000);
+    }
 
     function copyToClipboard(text) {
         if (!text) return false;
@@ -371,6 +383,7 @@
             function copyText(text) {
                 if (!text) return;
                 copyToClipboard(text);
+                showToast('复制成功');
             }
 
             function findResultCard() {
@@ -475,6 +488,7 @@
             function copyText(text) {
                 if (!text) return;
                 copyToClipboard(text);
+                showToast('复制成功');
             }
 
             /**
