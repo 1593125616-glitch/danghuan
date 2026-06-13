@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.62
+// @version      1.7.63
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1733,8 +1733,8 @@
 
     function addClipboardButton() {
         const readBtn = document.createElement('button');
-        readBtn.textContent = '📋 读取剪贴板信息';
-        readBtn.style.cssText = 'position:fixed; top:4cm; right:10px; z-index:100000; height:1.5cm; min-width:3cm; padding:0 0.6cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.5cm; line-height:1.5cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
+        readBtn.textContent = '📋 读取剪贴板';
+        readBtn.style.cssText = 'position:fixed; top:4cm; right:10px; z-index:100000; height:1.3cm; min-width:2.5cm; padding:0 0.2cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.3cm; line-height:1.3cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
         readBtn.onclick = async () => {
             let text = '';
             try {
