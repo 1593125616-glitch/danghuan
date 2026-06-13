@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.32
+// @version      1.2.33
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        none
+// @grant        GM_getClipboard
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/jixing.tag.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/jixing.tag.user.js
 // ==/UserScript==
@@ -1224,27 +1225,40 @@
 
     let retryCount = 0;
     function checkModel(force = false) {
-        checkPageSwitch();
-        const txt = getOfficialText();
-        if (!txt || txt.length < CONFIG.minOfficialLength) {
-            if (force && retryCount < CONFIG.maxRetries) {
+        try {
+            checkPageSwitch();
+            const txt = getOfficialText();
+            if (!txt || txt.length < CONFIG.minOfficialLength) {
+                if (force && retryCount < CONFIG.maxRetries) {
+                    retryCount++;
+                    setTimeout(() => checkModel(true), CONFIG.retryInterval);
+                } else hideBanner();
+                return;
+            }
+            retryCount = 0;
+            const brand = getInputValueByLabel('品牌');
+            const category = getInputValueByLabel('品类');
+            // 品牌或品类为空时等待异步渲染完成
+            if (force && (!brand || !category) && retryCount < CONFIG.maxRetries) {
                 retryCount++;
                 setTimeout(() => checkModel(true), CONFIG.retryInterval);
-            } else hideBanner();
-            return;
-        }
-        retryCount = 0;
-        const errs = [];
-        let hasSelection = false;
-        for (const it of CONFIG.items) {
-            let sel = it.selectedFn ? it.selectedFn() : getSelectedValue(it.labelKeywords);
-            if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
-            hasSelection = true;
-            const e = it.customCheck(txt, sel);
-            if (e) errs.push(e);
-        }
-        if (hasSelection) {
-            errs.length > 0 ? showBanner(errs) : hideBanner();
+                return;
+            }
+            retryCount = 0;
+            const errs = [];
+            let hasSelection = false;
+            for (const it of CONFIG.items) {
+                let sel = it.selectedFn ? it.selectedFn() : getSelectedValue(it.labelKeywords);
+                if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
+                hasSelection = true;
+                const e = it.customCheck(txt, sel);
+                if (e) errs.push(e);
+            }
+            if (hasSelection) {
+                errs.length > 0 ? showBanner(errs) : hideBanner();
+            }
+        } catch (e) {
+            console.error('[型号] checkModel 异常:', e);
         }
     }
 
@@ -1254,19 +1268,29 @@
             const btn = e.target.closest('button');
             if (btn && /读取剪贴板/.test(btn.textContent)) {
                 console.log('[型号脚本] 检测到剪贴板按钮点击');
+                let text = '';
                 try {
-                    const text = await navigator.clipboard.readText();
-                    if (text && text.trim().length >= CONFIG.minOfficialLength) {
-                        clipboardText = text.trim();
-                        clipboardTime = Date.now();
-                        retryCount = 0;
-                        checkModel(true);
-                        showTempMsg('型号脚本已读取剪贴板');
-                    } else {
-                        console.warn('[型号脚本] 剪贴板内容太短');
+                    text = await navigator.clipboard.readText();
+                } catch {
+                    try {
+                        text = await new Promise((resolve, reject) => {
+                            GM_getClipboard((clipText) => {
+                                clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
+                            });
+                        });
+                    } catch (err) {
+                        console.error('[型号脚本] 读取剪贴板失败:', err);
+                        return;
                     }
-                } catch (err) {
-                    console.error('[型号脚本] 读取剪贴板失败:', err);
+                }
+                if (text && text.trim().length >= CONFIG.minOfficialLength) {
+                    clipboardText = text.trim();
+                    clipboardTime = Date.now();
+                    retryCount = 0;
+                    checkModel(true);
+                    showTempMsg('型号脚本已读取剪贴板');
+                } else {
+                    console.warn('[型号脚本] 剪贴板内容太短');
                 }
             }
         });
@@ -1310,10 +1334,17 @@
     watchSubmitButton();
     setTimeout(() => { syncAllSelects(); checkModel(true); }, 2000);
 
+    let modelCheckTimer = null;
     const obs = new MutationObserver(() => {
-        clearTimeout(window.__modelCheckTimer);
-        window.__modelCheckTimer = setTimeout(() => checkModel(true), 300);
+        clearTimeout(modelCheckTimer);
+        modelCheckTimer = setTimeout(() => { try { checkModel(true); } catch (e) { console.error('[型号] observer checkModel 异常:', e); } }, 300);
     });
-    obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'aria-checked'] });
-    window.addEventListener('load', () => setTimeout(() => checkModel(true), 800));
+    if (document.body) {
+        obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'aria-checked'] });
+    }
+    window.addEventListener('unload', () => {
+        obs.disconnect();
+        clearTimeout(modelCheckTimer);
+    });
+    window.addEventListener('load', () => setTimeout(() => { try { checkModel(true); } catch (e) { console.error('[型号] load checkModel 异常:', e); } }, 800));
 })();

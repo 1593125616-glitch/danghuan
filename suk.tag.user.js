@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.60
+// @version      1.7.61
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        none
+// @grant        GM_getClipboard
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/suk.tag.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/suk.tag.user.js
 // ==/UserScript==
@@ -1645,74 +1646,86 @@
     }
 
     function check(force = false) {
-        const txt = getOfficialText();
-        if (!txt || txt.length < CONFIG.minOfficialLength) {
-            if (force && retryCount < CONFIG.maxRetries) {
+        try {
+            const txt = getOfficialText();
+            if (!txt || txt.length < CONFIG.minOfficialLength) {
+                if (force && retryCount < CONFIG.maxRetries) {
+                    retryCount++;
+                    setTimeout(() => check(true), CONFIG.retryInterval);
+                } else hideBanner();
+                return;
+            }
+            retryCount = 0;
+
+            const brand = getInputValueByLabel('品牌');
+            const category = getInputValueByLabel('品类');
+            // 品牌或品类为空时等待异步渲染完成
+            if (force && (!brand || !category) && retryCount < CONFIG.maxRetries) {
                 retryCount++;
                 setTimeout(() => check(true), CONFIG.retryInterval);
-            } else hideBanner();
-            return;
-        }
-        retryCount = 0;
-
-        const brand = getInputValueByLabel('品牌');
-        // 如果黑机遮罩存在但当前数据不是黑机，清除
-        if (document.querySelector('.qc-black-machine')) {
-            if (!brand || !/苹果|Apple/i.test(brand) || !/是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
-                document.querySelector('.qc-black-machine').remove();
-                window._qcBlackMachineTime = 0;
+                return;
             }
-        }
-        // 黑机检测：同时支持"是否置换机器/黑机: 是"和"是否黑机: 是"两种格式
-        if (brand && /苹果|Apple/i.test(brand) && /是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
-            if (document.querySelector('.qc-black-machine')) return;
-            if (window._qcBlackMachineTime && Date.now() - window._qcBlackMachineTime < CONFIG.bannerDuration) return;
-            window._qcBlackMachineTime = Date.now();
-            const overlay = document.createElement('div');
-            overlay.className = 'qc-black-machine';
-            overlay.textContent = '该机器是黑机需要打掉';
-            overlay.style.cssText = 'position:fixed; top:4cm; left:50%; transform:translateX(-50%); z-index:999999; background:#d93025; color:#fff; padding:15px 30px; font-size:1cm; font-weight:bold; text-align:center; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);';
-            document.body.appendChild(overlay);
-            setTimeout(() => document.querySelector('.qc-black-machine')?.remove(), CONFIG.bannerDuration);
-            return;
-        }
+            retryCount = 0;
+            // 如果黑机遮罩存在但当前数据不是黑机，清除
+            if (document.querySelector('.qc-black-machine')) {
+                if (!brand || !/苹果|Apple/i.test(brand) || !/是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
+                    document.querySelector('.qc-black-machine').remove();
+                    window._qcBlackMachineTime = 0;
+                }
+            }
+            // 黑机检测：同时支持"是否置换机器/黑机: 是"和"是否黑机: 是"两种格式
+            if (brand && /苹果|Apple/i.test(brand) && /是否(?:置换机器\/)?黑机[：:]\s*是/i.test(txt)) {
+                if (document.querySelector('.qc-black-machine')) return;
+                if (window._qcBlackMachineTime && Date.now() - window._qcBlackMachineTime < CONFIG.bannerDuration) return;
+                window._qcBlackMachineTime = Date.now();
+                const overlay = document.createElement('div');
+                overlay.className = 'qc-black-machine';
+                overlay.textContent = '该机器是黑机需要打掉';
+                overlay.style.cssText = 'position:fixed; top:4cm; left:50%; transform:translateX(-50%); z-index:999999; background:#d93025; color:#fff; padding:15px 30px; font-size:1cm; font-weight:bold; text-align:center; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+                document.body.appendChild(overlay);
+                setTimeout(() => document.querySelector('.qc-black-machine')?.remove(), CONFIG.bannerDuration);
+                return;
+            }
 
-        const inlineErrs = {};
-        let hasActiveCheck = false;
-        for (const it of CONFIG.items) {
-            if (it.conditionalCheck) {
-                const sel = it.labelKeywords && it.labelKeywords.length ? getSelectedValue(it.labelKeywords) : null;
-                if (sel && /不涉及|不检测|跳过/i.test(sel)) continue;
-                const e = it.conditionalCheck(txt);
-                if (e) { inlineErrs[it.name] = e; }
+            const inlineErrs = {};
+            let hasActiveCheck = false;
+            for (const it of CONFIG.items) {
+                if (it.conditionalCheck) {
+                    const sel = it.labelKeywords && it.labelKeywords.length ? getSelectedValue(it.labelKeywords) : null;
+                    if (sel && /不涉及|不检测|跳过/i.test(sel)) continue;
+                    const e = it.conditionalCheck(txt);
+                    if (e) { inlineErrs[it.name] = e; }
+                    hasActiveCheck = true;
+                    continue;
+                }
+                let sel = getSelectedValue(it.labelKeywords);
+                if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
                 hasActiveCheck = true;
-                continue;
-            }
-            let sel = getSelectedValue(it.labelKeywords);
-            if (!sel || /不检测|不涉及|跳过/i.test(sel)) continue;
-            hasActiveCheck = true;
-            if (it.customCheck) {
+                if (it.customCheck) {
+                    if (it.requiredOfficialKeys && it.requiredOfficialKeys.length > 0 && !hasField(txt, it.requiredOfficialKeys)) continue;
+                    const e = it.customCheck(txt, sel);
+                    if (e) inlineErrs[it.name] = e;
+                    continue;
+                }
                 if (it.requiredOfficialKeys && it.requiredOfficialKeys.length > 0 && !hasField(txt, it.requiredOfficialKeys)) continue;
-                const e = it.customCheck(txt, sel);
-                if (e) inlineErrs[it.name] = e;
-                continue;
+                let terms = it.searchTransform ? (Array.isArray(it.searchTransform(sel)) ? it.searchTransform(sel) : [it.searchTransform(sel)]) : [sel];
+                if (!terms.some(t => txt.toLowerCase().includes(t.toLowerCase()))) {
+                    inlineErrs[it.name] = `${it.name} 在官方信息中未找到"${sel}"，可能选错`;
+                }
             }
-            if (it.requiredOfficialKeys && it.requiredOfficialKeys.length > 0 && !hasField(txt, it.requiredOfficialKeys)) continue;
-            let terms = it.searchTransform ? (Array.isArray(it.searchTransform(sel)) ? it.searchTransform(sel) : [it.searchTransform(sel)]) : [sel];
-            if (!terms.some(t => txt.toLowerCase().includes(t.toLowerCase()))) {
-                inlineErrs[it.name] = `${it.name} 在官方信息中未找到"${sel}"，可能选错`;
+            const prevErrs = window._sukPrevInlineErrs || {};
+            if (JSON.stringify(prevErrs) !== JSON.stringify(inlineErrs)) {
+                if (hasActiveCheck) {
+                    window._sukPrevInlineErrs = inlineErrs;
+                    Object.keys(inlineErrs).length ? showInlineErrors(inlineErrs) : document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
+                }
+            } else if (hasActiveCheck && !Object.keys(inlineErrs).length && document.querySelector('.suk-err-tip')) {
+                document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
             }
+            showBottomPopup(inlineErrs);
+        } catch (e) {
+            console.error('[质检] check 异常:', e);
         }
-        const prevErrs = window._sukPrevInlineErrs || {};
-        if (JSON.stringify(prevErrs) !== JSON.stringify(inlineErrs)) {
-            if (hasActiveCheck) {
-                window._sukPrevInlineErrs = inlineErrs;
-                Object.keys(inlineErrs).length ? showInlineErrors(inlineErrs) : document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
-            }
-        } else if (hasActiveCheck && !Object.keys(inlineErrs).length && document.querySelector('.suk-err-tip')) {
-            document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
-        }
-        showBottomPopup(inlineErrs);
     }
 
     function addClipboardButton() {
@@ -1720,20 +1733,30 @@
         readBtn.textContent = '📋 读取剪贴板信息';
         readBtn.style.cssText = 'position:fixed; top:4cm; right:10px; z-index:100000; height:1.5cm; min-width:3cm; padding:0 0.6cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.5cm; line-height:1.5cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
         readBtn.onclick = async () => {
+            let text = '';
             try {
-                const text = await navigator.clipboard.readText();
-                if (!text || text.trim().length < CONFIG.minOfficialLength) {
-                    alert('剪贴板内容太短，可能不是有效的查询信息。');
+                text = await navigator.clipboard.readText();
+            } catch {
+                try {
+                    text = await new Promise((resolve, reject) => {
+                        GM_getClipboard((clipText) => {
+                            clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
+                        });
+                    });
+                } catch {
+                    alert('无法读取剪贴板，请确保已授予权限。');
                     return;
                 }
-                clipboardOfficialText = text.trim();
-                clipboardUpdateTime = Date.now();
-                retryCount = 0;
-                check(true);
-                showTemporaryMessage('✅ 已读取剪贴板信息，正在对比');
-            } catch (err) {
-                alert('无法读取剪贴板，请确保已授予权限。');
             }
+            if (!text || text.trim().length < CONFIG.minOfficialLength) {
+                alert('剪贴板内容太短，可能不是有效的查询信息。');
+                return;
+            }
+            clipboardOfficialText = text.trim();
+            clipboardUpdateTime = Date.now();
+            retryCount = 0;
+            check(true);
+            showTemporaryMessage('✅ 已读取剪贴板信息，正在对比');
         };
         document.body.appendChild(readBtn);
     }
@@ -1787,7 +1810,8 @@
         location.reload(true);
     }
 
-    setInterval(checkAutoRefresh, 60 * 1000);
+    const refreshInterval = setInterval(checkAutoRefresh, 60 * 1000);
+    window.addEventListener('unload', () => clearInterval(refreshInterval));
     checkAutoRefresh();
 
     document.addEventListener('visibilitychange', () => {
@@ -1805,14 +1829,21 @@
 
     check(true);
 
+    let checkTimer = null;
     const obs = new MutationObserver(() => {
-        clearTimeout(window.__checkTimer);
-        window.__checkTimer = setTimeout(() => check(true), 300);
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => { try { check(true); } catch (e) { console.error('[质检] observer check 异常:', e); } }, 300);
     });
-    obs.observe(document.body, {
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'aria-checked']
+    if (document.body) {
+        obs.observe(document.body, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'aria-checked']
+        });
+    }
+    window.addEventListener('unload', () => {
+        obs.disconnect();
+        clearTimeout(checkTimer);
     });
-    window.addEventListener('load', () => setTimeout(() => check(true), 800));
+    window.addEventListener('load', () => setTimeout(() => { try { check(true); } catch (e) { console.error('[质检] load check 异常:', e); } }, 800));
 })();

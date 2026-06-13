@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.59
+// @version      0.60
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -39,7 +39,8 @@
         console.log(`[啞寶腳本] 凌晨${now.getHours()}:${now.getMinutes()} 触发强刷`);
         location.reload(true);
     }
-    setInterval(executeRefresh, 60 * 1000);
+    const refreshInterval = setInterval(executeRefresh, 60 * 1000);
+    window.addEventListener('unload', () => clearInterval(refreshInterval));
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') executeRefresh();
     });
@@ -310,27 +311,32 @@
             }
 
             function onQueryClick() {
-                clearAll();
-                state.processing = true;
-                state.querySerial++;
+                try {
+                    clearAll();
+                    state.processing = true;
+                    state.querySerial++;
 
-                const input = document.getElementById('search');
-                state.currentIMEI = input ? input.value.trim() : '';
-                const serial = state.querySerial;
-                log(`查詢按鈕點擊，序號 ${serial}，IMEI: ${state.currentIMEI}`);
+                    const input = document.getElementById('search');
+                    state.currentIMEI = input ? input.value.trim() : '';
+                    const serial = state.querySerial;
+                    log(`查詢按鈕點擊，序號 ${serial}，IMEI: ${state.currentIMEI}`);
 
-                let midAttempts = 0;
-                const midInterval = setInterval(() => {
-                    const confirmTexts = ['确定', '確定', '是', '查询', '提交', 'OK'];
-                    for (let t of confirmTexts) {
-                        const btn = findButtonByText(t);
-                        if (btn) { simpleClick(btn); break; }
-                    }
-                    if (++midAttempts > 20) clearInterval(midInterval);
-                }, 300);
-                addTimer(midInterval);
+                    let midAttempts = 0;
+                    const midInterval = setInterval(() => {
+                        const confirmTexts = ['确定', '確定', '是', '查询', '提交', 'OK'];
+                        for (let t of confirmTexts) {
+                            const btn = findButtonByText(t);
+                            if (btn) { simpleClick(btn); break; }
+                        }
+                        if (++midAttempts > 20) clearInterval(midInterval);
+                    }, 300);
+                    addTimer(midInterval);
 
-                waitForResult(serial);
+                    waitForResult(serial);
+                } catch (e) {
+                    log('onQueryClick 异常:', e.message);
+                    clearAll();
+                }
             }
 
             function bindSearchButton() {
@@ -345,7 +351,8 @@
 
             function init() {
                 if (!bindSearchButton()) {
-                    new MutationObserver(() => { if (bindSearchButton()) observer.disconnect(); }).observe(document.body, { childList: true, subtree: true });
+                    const searchBtnObserver = new MutationObserver(() => { if (bindSearchButton()) searchBtnObserver.disconnect(); });
+                    searchBtnObserver.observe(document.body, { childList: true, subtree: true });
                     log('等待查詢按鈕出現...');
                 }
             }
@@ -454,6 +461,7 @@
             }, 1000);
             const observer = new MutationObserver(tryExtractAndCopy);
             observer.observe(document.body, { childList: true, subtree: true });
+            window.addEventListener('unload', () => observer.disconnect());
         })();
     }
 
@@ -654,6 +662,7 @@
             }, 1000);
             const observer = new MutationObserver(tryExtractAndCopy);
             observer.observe(document.body, { childList: true, subtree: true });
+            window.addEventListener('unload', () => observer.disconnect());
 
             log('VIVO 監聽器已啟動');
         })();
