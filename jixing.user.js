@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.35
+// @version      1.2.37
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -956,7 +956,7 @@
         // 去除 AI版（含空格或不含空格）
         raw = raw.replace(/AI\s*版/gi, ' ');
         raw = raw.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
-        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机|键盘式双面保护壳/gi, ' ');
+        raw = raw.replace(/无线充|无线耳机|有线充|移动定制|联通定制|电信定制|艺术定制版|原神刻晴定制机|中文版|高配版|耳夹耳机|SIM卡版|艺术家联名版|二手机|真无线降噪耳机|开放式耳机|键盘式双面保护壳/gi, ' ');
         raw = raw.replace(/\(\s*USB-C\s*\)/gi, ' ');
         const fns = ['SKU型号', 'skuId', '品牌', '入网型号', '供应型号', '支持网络', '是否激活', '维修记录', '是否演示机', '是否官方二手机', '是否官翻机', '是否零售机', '是否购买了华为care', '是否空中激活', '激活日期', '国家版本', '是否在保', '保修模式', '保修结束日期', '是否官换机', '是否个性化定制', '屏幕尺寸', 'CPU', '商品属性', '是否自营渠道购买', '内存', '颜色', '零件描述'];
         for (const f of fns) { const i = raw.indexOf(f); if (i !== -1) { raw = raw.substring(0, i).trim(); break; } }
@@ -1269,11 +1269,15 @@
                 console.log('[型号脚本] 检测到剪贴板按钮点击');
                 let text = '';
                 try {
-                    text = await new Promise((resolve, reject) => {
-                        GM_getClipboard((clipText) => {
-                            clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
-                        });
-                    });
+                    text = await Promise.race([
+                        new Promise((resolve, reject) => {
+                            if (typeof GM_getClipboard === 'undefined') return reject(new Error('GM_getClipboard 不可用'));
+                            GM_getClipboard((clipText) => {
+                                clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
+                            });
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('GM_getClipboard 超时')), 500))
+                    ]);
                 } catch {
                     try {
                         text = await navigator.clipboard.readText();
