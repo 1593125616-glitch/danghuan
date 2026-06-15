@@ -1,12 +1,11 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.64
+// @version      1.7.66
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
-// @grant        none
 // @grant        GM_getClipboard
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
@@ -277,7 +276,19 @@
                     }
 
                     if (!/^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) {
-                        if (normalize(officialColor).includes(normalizedSelected) || normalizedSelected.includes(normalize(officialColor))) return null;
+                        const normOff = normalize(officialColor);
+                        const normSel = normalizedSelected;
+                        // 防止复合颜色名子串误匹配，例如"玫瑰金色"包含"金色"
+                        const compoundColors = ['玫瑰金', '粉红', '亮黑', '中国红', '深空灰', '星光色', '午夜色', '远峰蓝', '苍岭绿', '暗紫', '石墨', '海蓝', '天峰蓝', '星宇橙'];
+                        let isFP = false;
+                        for (const cc of compoundColors) {
+                            const selCore = normSel.replace(/色$/g, '');
+                            if (normOff.includes(cc) && cc !== normSel && cc !== selCore && selCore && cc.includes(selCore)) {
+                                isFP = true;
+                                break;
+                            }
+                        }
+                        if (!isFP && (normOff.includes(normSel) || normSel.includes(normOff))) return null;
                         return `颜色 应为【${officialColor}】，你选了【${selectedVal}】`;
                     }
 

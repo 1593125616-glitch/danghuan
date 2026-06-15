@@ -1,12 +1,11 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.64
+// @version      1.7.66
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
-// @grant        none
 // @grant        GM_getClipboard
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/suk.tag.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/suk.tag.user.js
@@ -277,7 +276,19 @@
                     }
 
                     if (!/^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) {
-                        if (normalize(officialColor).includes(normalizedSelected) || normalizedSelected.includes(normalize(officialColor))) return null;
+                        const normOff = normalize(officialColor);
+                        const normSel = normalizedSelected;
+                        // 防止复合颜色名子串误匹配，例如"玫瑰金色"包含"金色"
+                        const compoundColors = ['玫瑰金', '粉红', '亮黑', '中国红', '深空灰', '星光色', '午夜色', '远峰蓝', '苍岭绿', '暗紫', '石墨', '海蓝', '天峰蓝', '星宇橙'];
+                        let isFP = false;
+                        for (const cc of compoundColors) {
+                            const selCore = normSel.replace(/色$/g, '');
+                            if (normOff.includes(cc) && cc !== normSel && cc !== selCore && selCore && cc.includes(selCore)) {
+                                isFP = true;
+                                break;
+                            }
+                        }
+                        if (!isFP && (normOff.includes(normSel) || normSel.includes(normOff))) return null;
                         return `颜色 应为【${officialColor}】，你选了【${selectedVal}】`;
                     }
 
@@ -1723,6 +1734,9 @@
                 document.querySelectorAll('.suk-err-tip').forEach(el => el.remove());
             }
             showBottomPopup(inlineErrs);
+            if (hasActiveCheck && Object.keys(inlineErrs).length) {
+                showErrorModal(inlineErrs);
+            }
             if (hasActiveCheck && clipboardOfficialText) {
                 Object.keys(inlineErrs).length === 0 ? showNoAnomalyMessage() : hideNoAnomalyMessage();
             }
@@ -1776,6 +1790,44 @@
         }, 2000);
     }
 
+    let acknowledgedErrors = [];
+
+    function showErrorModal(errMap) {
+        const allNames = Object.keys(errMap);
+        if (!allNames.length) return;
+        const newNames = allNames.filter(n => !acknowledgedErrors.includes(n));
+        if (!newNames.length) return;
+        document.querySelectorAll('.suk-error-modal-overlay').forEach(el => el.remove());
+        const overlay = document.createElement('div');
+        overlay.className = 'suk-error-modal-overlay';
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999999; display:flex; justify-content:center; align-items:center;';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#fff; border-radius:8px; padding:24px; min-width:300px; max-width:450px; box-shadow:0 4px 20px rgba(0,0,0,0.3); text-align:center;';
+        const title = document.createElement('div');
+        title.textContent = '以下功能选错了，请检查：';
+        title.style.cssText = 'font-size:16px; font-weight:bold; color:#d93025; margin-bottom:16px;';
+        box.appendChild(title);
+        const list = document.createElement('div');
+        list.style.cssText = 'text-align:left; font-size:14px; color:#333; margin-bottom:16px;';
+        for (const name of allNames) {
+            const item = document.createElement('div');
+            item.textContent = '• ' + name + '选错了';
+            item.style.cssText = 'padding:4px 0;';
+            list.appendChild(item);
+        }
+        box.appendChild(list);
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = '确认';
+        confirmBtn.style.cssText = 'padding:8px 32px; background:#007aff; color:#fff; border:none; border-radius:4px; font-size:14px; cursor:pointer;';
+        confirmBtn.onclick = () => {
+            acknowledgedErrors.push(...allNames);
+            overlay.remove();
+        };
+        box.appendChild(confirmBtn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    }
+
     function showNoAnomalyMessage() {
         hideNoAnomalyMessage();
         const div = document.createElement('div');
@@ -1807,6 +1859,7 @@
             tableVirtualContainer = null;
             hideBanner();
             hideNoAnomalyMessage();
+            acknowledgedErrors = [];
             retryCount = 0;
             console.log('[质检高亮] 已清空对比数据，等待新查询结果');
         }
