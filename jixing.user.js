@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.34
+// @version      1.2.35
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1269,16 +1269,16 @@
                 console.log('[型号脚本] 检测到剪贴板按钮点击');
                 let text = '';
                 try {
-                    text = await navigator.clipboard.readText();
+                    text = await new Promise((resolve, reject) => {
+                        GM_getClipboard((clipText) => {
+                            clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
+                        });
+                    });
                 } catch {
                     try {
-                        text = await new Promise((resolve, reject) => {
-                            GM_getClipboard((clipText) => {
-                                clipText ? resolve(clipText) : reject(new Error('GM_getClipboard 为空'));
-                            });
-                        });
-                    } catch (err) {
-                        console.error('[型号脚本] 读取剪贴板失败:', err);
+                        text = await navigator.clipboard.readText();
+                    } catch {
+                        console.error('[型号脚本] 读取剪贴板失败');
                         return;
                     }
                 }
