@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.37
+// @version      1.2.38
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -644,7 +644,7 @@
 
                     // ========== Apple Watch 硬性型号映射 ==========
                     if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
-                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '').replace(/[，、]/g, ',').replace(/,\s*/g, ', ');
                         const mapped = appleWatchModelMapping[key];
                         if (mapped) {
                             if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
@@ -654,7 +654,7 @@
 
                     // ========== Apple MacBook 硬性型号映射 ==========
                     if (/苹果|Apple/i.test(brand) && (category === '笔记本' || category === '电脑')) {
-                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '').replace(/[，、]/g, ',').replace(/,\s*/g, ', ');
                         const mapped = appleMacBookModelMapping[key];
                         if (mapped) {
                             if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
@@ -664,7 +664,7 @@
 
                     // ========== Apple AirPods 硬性型号映射 ==========
                     if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
-                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '');
+                        const key = officialModelClean.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[（()）]/g, '').replace(/[，、]/g, ',').replace(/,\s*/g, ', ');
                         const mapped = appleAirPodsModelMapping[key];
                         if (mapped) {
                             if (normalizeModelForCompare(mapped).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
