@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.38
+// @version      1.2.39
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -216,32 +216,49 @@
 
     // ========== Apple MacBook 映射表 ==========
     const appleMacBookModelMapping = {
-        'macbook pro retina, 13寸, early 2015': '苹果 15年 13寸 MacBook Pro',
-        'macbook pro 16寸, 2019': '苹果 19年 16寸 MacBook Pro',
-        'macbook pro 13寸, m1, 2020': '苹果 20年 13寸 MacBook Pro M1',
-        'macbook pro 13寸, 2019, t3': '苹果 19年 13寸 MacBook Pro',
-        'macbook pro 13寸, 2017, t3': '苹果 17年 13寸 MacBook Pro',
-        'macbook pro retina, 13寸, mid 2012': '苹果 12年 13寸 MacBook Pro',
-        'macbook pro 13寸, 2018, t3': '苹果 18年 13寸 MacBook Pro',
-        'macbook pro 13寸, 2020, t3': '苹果 20年 13寸 MacBook Pro',
-        'macbook pro 13寸, m2, 2022': '苹果 22年 13寸 MacBook Pro',
-        'macbook air 13寸, m4, 2025': '苹果 25年 13寸 MacBook Air',
         'macbook air 13寸, 2017': '苹果 17年 13寸 MacBook Air',
-        'macbook air 13寸, early 2015': '苹果 15年 13寸 MacBook Air',
         'macbook air 13寸, early 2014': '苹果 14年 13寸 MacBook Air',
+        'macbook air 13寸, early 2015': '苹果 15年 13寸 MacBook Air',
+        'macbook air 13寸, m2, 2022': '苹果 22年 13寸 MacBook Air',
         'macbook air 13寸, m3, 2024': '苹果 24年 13寸 MacBook Air',
+        'macbook air 13寸, m4, 2025': '苹果 25年 13寸 MacBook Air',
         'macbook air 13寸, mid 2012': '苹果 12年 13寸 MacBook Air',
         'macbook air 13寸, mid 2013': '苹果 13年 13寸 MacBook Air',
         'macbook air 11寸, early 2014': '苹果 14年 11寸 MacBook Air',
         'macbook air 11寸, early 2015': '苹果 15年 11寸 MacBook Air',
-        'macbook air 11寸, mid 2013': '苹果 13年 11寸 MacBook Air',
         'macbook air 11寸, late 2010': '苹果 10年 11寸 MacBook Air',
         'macbook air 11寸, mid 2011': '苹果 11年 11寸 MacBook Air',
+        'macbook air 11寸, mid 2013': '苹果 13年 11寸 MacBook Air',
+        'macbook air m1, 2020': '苹果 20年 13寸 MacBook Air M1',
+        'macbook air m2, 2022': '苹果 22年 13寸 MacBook Air',
+        'macbook air retina, 13寸, 2019': '苹果 19年 13寸 MacBook Air',
+        'macbook air retina, 13寸, 2020': '苹果 20年 13寸 MacBook Air',
+        'macbook neo': '苹果 26年 13寸 MacBook Neo',
+        'macbook pro 13寸, 2016, t3': '苹果 16年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2017, t3': '苹果 17年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2018, t3': '苹果 18年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2019, t3': '苹果 19年 13寸 MacBook Pro',
+        'macbook pro 13寸, 2020, t3': '苹果 20年 13寸 MacBook Pro',
+        'macbook pro 13寸, early 2011': '苹果 11年 13寸 MacBook Pro',
+        'macbook pro 13寸, m1, 2020': '苹果 20年 13寸 MacBook Pro M1',
+        'macbook pro 13寸, m2, 2022': '苹果 22年 13寸 MacBook Pro',
+        'macbook pro 14寸, m2 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M2',
+        'macbook pro 14寸, m3, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
+        'macbook pro 14寸, m3 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
         'macbook pro 14寸, m4, 2024': '苹果 24年 14寸 MacBook Pro',
         'macbook pro 14寸, m4 pro/max, 2024': '苹果 24年 14寸 MacBook Pro',
-        'macbook pro 14寸, m3 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
-        'macbook pro 14寸, m3, nov 2023': '苹果 23年 14寸 MacBook Pro M3',
-        'macbook pro 14寸, m2 pro/max, nov 2023': '苹果 23年 14寸 MacBook Pro M2',
+        'macbook pro 15寸, 2016': '苹果 16年 15寸 MacBook Pro',
+        'macbook pro 15寸, 2017': '苹果 17年 15寸 MacBook Pro',
+        'macbook pro 15寸, 2019': '苹果 19年 15寸 MacBook Pro',
+        'macbook pro 16寸, 2019': '苹果 19年 16寸 MacBook Pro',
+        'macbook pro retina, 13, mid 2014': '苹果 14年 13寸 MacBook Pro',
+        'macbook pro retina, 13 in, late 2013': '苹果 13年 13寸 MacBook Pro',
+        'macbook pro retina, 13寸, early 2015': '苹果 15年 13寸 MacBook Pro',
+        'macbook pro retina, 13寸, mid 2012': '苹果 12年 13寸 MacBook Pro',
+        'macbook pro retina, 15 in, late 2013': '苹果 13年 15寸 MacBook Pro',
+        'macbook pro retina, 15-in, mid 2014': '苹果 14年 15寸 MacBook Pro',
+        'macbook pro retina, 15寸, mid 2015': '苹果 15年 15寸 MacBook Pro',
+        'macbook retina, 12寸, early 2015': '苹果 15年 12寸 MacBook',
         'macbook retina, 12寸, early 2016': '苹果 16年 12寸 MacBook',
     };
 
