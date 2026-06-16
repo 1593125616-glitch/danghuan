@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.48
+// @version      1.2.50
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -217,6 +217,15 @@
         '荣耀平板x9 pro 11.5英寸': '荣耀平板 X9 Pro',
         '荣耀magicpad3 12.5 柔光版 12.5英寸': '荣耀 MagicPad 3 12.5英寸 柔光版',
         '荣耀magicpad3 pro 13.3 13.3英寸': '荣耀 MagicPad 3 Pro 13.3英寸',
+    };
+
+    // ========== 小米/红米平板映射表 ==========
+    const xiaomiPadModelMapping = {
+        '小米平板 4 plus 10 英寸 版': '小米平板 4 Plus',
+        '小米平板 4 plus 10 英寸': '小米平板 4 Plus',
+        '小米平板 4 8 英寸': '小米平板 4',
+        '小米平板 4 8 英寸 版': '小米平板 4',
+        'xiaomi pad 7 ultra 15 周年纪念版': '小米 Pad 7 Ultra',
     };
 
     // ========== Apple Watch 映射表 ==========
@@ -722,6 +731,34 @@
                         }
                     }
 
+                    // ========== 小米/红米平板特殊规则（从型号行提取） ==========
+                    if ((brand === '小米' || brand === '红米' || /Xiaomi|Redmi/i.test(brand)) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        const modelLine = extractInfoLine(officialText, '型号') || '';
+                        if (modelLine) {
+                            let model = modelLine;
+                            model = cleanModelString(model);
+                            model = model.replace(/\s+/g, ' ').trim();
+                            const key = model.toLowerCase().replace(/\s+/g, ' ');
+                            let expected = xiaomiPadModelMapping[key];
+                            if (expected) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                            if (model) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(model).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${model}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                        }
+                    }
+
                     // ========== 华为特殊规则（手机版） ==========
                     if (brand === '华为' && officialModelClean) {
                         const huaweiSpecialModels = [
@@ -1046,6 +1083,7 @@
         raw = raw.replace(/Wi-Fi/gi, ' ');
         raw = raw.replace(/WIFI/gi, ' ');
         raw = raw.replace(/移动网络/gi, ' ');
+        raw = raw.replace(/5G版|4G版|LTE版/gi, ' ');
         raw = raw.replace(/eSIM\s*版/gi, ' ').replace(/[（(]\s*LTE\s*[）)]/gi, ' ').replace(/[（(]\s*eSIM\s*[）)]/gi, ' ').replace(/[（(]\s*蓝牙\s*[）)]/gi, ' ').replace(/\bLTE\b/gi, ' ').replace(/\b(esim|eSim|lte|wifi|wi-fi)\b/gi, ' ');
         raw = raw.replace(/鸿蒙NEXT先锋版|先锋版|NEXT先锋版/gi, ' ');
         raw = raw.replace(/\b\d+mm\b/gi, ' ');

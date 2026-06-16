@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.67
+// @version      0.71
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -194,11 +194,11 @@
     // ==================== ybcheck.com ====================
     if (host.includes('ybcheck.com') || host.includes('57306.com')) {
         (function() {
-            const MAX_WAIT = 180000;
-            const COPY_BTN_DELAY = 1500;   // 延迟后开始检查复制
+            const MAX_WAIT = 300000;
+            const COPY_BTN_DELAY = 1500;
             const MAX_COPY_WAIT = 15000;
-            const GEN_CHECK_INTERVAL = 500;
-            const MAX_GEN_ATTEMPTS = Math.ceil(MAX_WAIT / GEN_CHECK_INTERVAL);
+            const CHECK_INTERVAL = 500;
+            const MAX_ATTEMPTS = Math.ceil(MAX_WAIT / CHECK_INTERVAL);
 
             let state = {
                 processing: false,
@@ -220,158 +220,82 @@
             function addTimer(id) { state.timers.push(id); }
             function addObserver(obs) { state.observers.push(obs); }
 
-            function getResultAreaText() {
-                const resultArea = document.getElementById('result') || document.getElementById('J_List');
-                return resultArea ? resultArea.innerText : '';
+            function findGenBtn() {
+                let btn = document.getElementById('initText');
+                if (btn && isVisible(btn)) return btn;
+                const all = findAllButtonsByText('生成文字');
+                for (const el of all) {
+                    if (isVisible(el)) return el;
+                }
+                return all[0] || null;
             }
 
-            function resultContainsIMEI() {
-                if (!state.currentIMEI) return false;
-                const text = getResultAreaText();
-                return text.includes(state.currentIMEI);
-            }
-
-            function handleCopyButton(serial) {
+            function handleCopyReady(serial) {
                 if (state.querySerial !== serial) return;
-                if (!isModalContentReady()) {
-                    log('彈窗內容尚未渲染完成，等待中...');
-                    return;
-                }
-                // 自行复制内容到剪贴板（GM_setClipboard 不依赖焦点）
                 const saveBox = document.querySelector('.confirm-bd .saveBox');
-                if (saveBox) {
-                    copyToClipboard(saveBox.innerText.trim());
+                if (!saveBox) { log('等待複製內容就緒...'); return; }
+                copyToClipboard(saveBox.innerText.trim());
+                const links = document.querySelectorAll('a.confirm-btn.primary');
+                let copyBtn = null;
+                for (const link of links) {
+                    const txt = link.textContent.trim();
+                    if (txt.includes('点此复制报告文字并关闭对话框') || txt.includes('點此復制報告文字並關閉對話框')) {
+                        copyBtn = link; break;
+                    }
                 }
-                // 点击按钮关闭弹窗
-                const copyBtn = findCopyLink();
-                if (copyBtn) {
-                    log('點擊複製按鈕關閉彈窗');
-                    simpleClick(copyBtn);
-                }
+                if (copyBtn) { simpleClick(copyBtn); }
                 log('流程結束');
                 clearAll();
             }
 
-            function startWatchingForCopy(serial) {
-                log('開始監聽複製按鈕...');
+            function startCopyWatch(serial) {
                 setTimeout(() => {
                     if (state.querySerial !== serial) return;
-
-                    handleCopyButton(serial);
-                    if (!state.processing) return; // clearAll 已被调用，不再注册新定时器
-
-                    const observer = new MutationObserver(() => {
-                        if (state.querySerial === serial) handleCopyButton(serial);
-                    });
-                    observer.observe(document.body, { childList: true, subtree: true });
-                    addObserver(observer);
-
-                    const interval = setInterval(() => {
-                        if (state.querySerial !== serial) { clearInterval(interval); return; }
-                        handleCopyButton(serial);
+                    handleCopyReady(serial);
+                    if (!state.processing) return;
+                    const obs = new MutationObserver(() => { if (state.querySerial === serial) handleCopyReady(serial); });
+                    obs.observe(document.body, { childList: true, subtree: true });
+                    addObserver(obs);
+                    const iv = setInterval(() => {
+                        if (state.querySerial !== serial) { clearInterval(iv); return; }
+                        handleCopyReady(serial);
                     }, 500);
-                    addTimer(interval);
-
-                    const timeout = setTimeout(() => {
-                        log('等待複製按鈕超時');
-                        clearAll();
-                    }, MAX_COPY_WAIT);
-                    addTimer(timeout);
+                    addTimer(iv);
+                    const to = setTimeout(() => { log('等待複製超時'); clearAll(); }, MAX_COPY_WAIT);
+                    addTimer(to);
                 }, COPY_BTN_DELAY);
-            }
-
-            function afterGenClick(serial, modalAlready) {
-                if (state.querySerial !== serial) return;
-                if (modalAlready) {
-                    startWatchingForCopy(serial);
-                    return;
-                }
-                const observer = new MutationObserver(() => {
-                    const modal = document.querySelector('.confirm-ft');
-                    if (modal && isVisible(modal)) {
-                        observer.disconnect();
-                        startWatchingForCopy(serial);
-                    }
-                });
-                observer.observe(document.body, { childList: true, subtree: true });
-                addObserver(observer);
-
-                const interval = setInterval(() => {
-                    const modal = document.querySelector('.confirm-ft');
-                    if (modal && isVisible(modal)) {
-                        clearInterval(interval);
-                        observer.disconnect();
-                        startWatchingForCopy(serial);
-                    }
-                }, 300);
-                addTimer(interval);
-
-                const timeout = setTimeout(() => {
-                    log('等待彈窗超時');
-                    clearAll();
-                }, 30000);
-                addTimer(timeout);
             }
 
             function tryClickGen(serial) {
                 if (state.querySerial !== serial) return false;
-                let genBtn = document.getElementById('initText');
-                if (!genBtn) {
-                    genBtn = findVisibleButtonByText('生成文字');
-                    if (!genBtn || !isVisible(genBtn)) return false;
-                }
-
-                const inModal = isInModal(genBtn);
-                if (!inModal && !resultContainsIMEI()) {
-                    log('結果尚未包含當前IMEI，跳過點擊（右側模式）');
-                    return false;
-                }
-
-                log('✅ 準備點擊生成文字按鈕 (模式: ' + (inModal ? '彈窗' : '右側') + ')');
-                if (!inModal) {
-                    log('按鈕在頁面中，滾動至可見');
-                    genBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    setTimeout(() => {
-                        if (state.querySerial !== serial) return;
-                        simpleClick(genBtn);
-                        afterGenClick(serial, false);
-                    }, 500);
-                } else {
-                    log('按鈕在彈窗內，直接點擊');
-                    setTimeout(() => {
-                        if (state.querySerial !== serial) return;
-                        simpleClick(genBtn);
-                        afterGenClick(serial, true);
-                    }, 500);
-                }
+                const btn = findGenBtn();
+                if (!btn) return false;
+                log('✅ 點擊生成文字');
+                simpleClick(btn);
+                startCopyWatch(serial);
                 return true;
             }
 
             function waitForResult(serial) {
-                const resultArea = document.getElementById('result') || document.getElementById('J_List') || document.body;
-                const observer = new MutationObserver(() => {
-                    if (tryClickGen(serial)) observer.disconnect();
+                const obs = new MutationObserver(() => {
+                    if (state.querySerial !== serial) return;
+                    if (tryClickGen(serial)) obs.disconnect();
                 });
-                observer.observe(resultArea, { childList: true, subtree: true });
-                addObserver(observer);
-
+                obs.observe(document.body, { childList: true, subtree: true });
+                addObserver(obs);
                 let attempts = 0;
-                const interval = setInterval(() => {
-                    if (state.querySerial !== serial) { clearInterval(interval); return; }
-                    if (tryClickGen(serial)) clearInterval(interval);
-                    else if (++attempts > MAX_GEN_ATTEMPTS) {
-                        clearInterval(interval);
-                        log(`未能在 ${MAX_WAIT/1000} 秒內找到生成文字按鈕`);
-                        clearAll();
-                    }
-                }, GEN_CHECK_INTERVAL);
-                addTimer(interval);
-
-                const timeout = setTimeout(() => {
+                const iv = setInterval(() => {
+                    if (state.querySerial !== serial) { clearInterval(iv); return; }
+                    if (tryClickGen(serial)) clearInterval(iv);
+                    else if (++attempts > MAX_ATTEMPTS) { clearInterval(iv); log('未找到生成文字按鈕'); clearAll(); }
+                }, CHECK_INTERVAL);
+                addTimer(iv);
+                const to = setTimeout(() => {
+                    if (state.querySerial !== serial) return;
                     log('結果加載超時');
                     clearAll();
                 }, MAX_WAIT);
-                addTimer(timeout);
+                addTimer(to);
             }
 
             function onQueryClick() {
@@ -379,45 +303,33 @@
                     clearAll();
                     state.processing = true;
                     state.querySerial++;
-
                     const input = document.getElementById('search');
                     state.currentIMEI = input ? input.value.trim() : '';
                     const serial = state.querySerial;
                     log(`查詢按鈕點擊，序號 ${serial}，IMEI: ${state.currentIMEI}`);
-
                     let midAttempts = 0;
-                    const midInterval = setInterval(() => {
-                        const confirmTexts = ['确定', '確定', '是', '查询', '提交', 'OK'];
-                        for (let t of confirmTexts) {
+                    const midIv = setInterval(() => {
+                        for (const t of ['确定', '確定', '是', '查询', '提交', 'OK']) {
                             const btn = findButtonByText(t);
                             if (btn) { simpleClick(btn); break; }
                         }
-                        if (++midAttempts > 20) clearInterval(midInterval);
+                        if (++midAttempts > 20) clearInterval(midIv);
                     }, 300);
-                    addTimer(midInterval);
-
+                    addTimer(midIv);
                     waitForResult(serial);
-                } catch (e) {
-                    log('onQueryClick 异常:', e.message);
-                    clearAll();
-                }
+                } catch (e) { log('onQueryClick 异常:', e.message); clearAll(); }
             }
 
             function bindSearchButton() {
                 const btn = document.getElementById('btn-search');
-                if (btn) {
-                    btn.addEventListener('click', onQueryClick);
-                    log('查詢按鈕綁定成功');
-                    return true;
-                }
+                if (btn) { btn.addEventListener('click', onQueryClick); log('查詢按鈕綁定成功'); return true; }
                 return false;
             }
 
             function init() {
                 if (!bindSearchButton()) {
-                    const searchBtnObserver = new MutationObserver(() => { if (bindSearchButton()) searchBtnObserver.disconnect(); });
-                    searchBtnObserver.observe(document.body, { childList: true, subtree: true });
-                    log('等待查詢按鈕出現...');
+                    const obs = new MutationObserver(() => { if (bindSearchButton()) obs.disconnect(); });
+                    obs.observe(document.body, { childList: true, subtree: true });
                 }
             }
 

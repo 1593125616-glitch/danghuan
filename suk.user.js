@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.70
+// @version      1.7.71
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1399,6 +1399,29 @@
                     if (!selected || /不检测|跳过/i.test(selected)) return null;
                     if (selected !== expected) {
                         return `网络制式 应为【${expected}】（${model}含对应关键词），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                name: '网络制式（小米平板）',
+                labelKeywords: ['网络制式'],
+                conditionalCheck: (officialText) => {
+                    const brand = getInputValueByLabel('品牌');
+                    if (!/小米|Xiaomi|Redmi|红米/i.test(brand)) return null;
+                    const category = getInputValueByLabel('品类');
+                    if (category !== '平板') return null;
+                    let model = extractField(officialText, '型号');
+                    if (!model) model = extractField(officialText, '机型');
+                    if (!model) return null;
+                    const has5g = /\b5G\b/i.test(model);
+                    const hasLte = /\bLTE\b/i.test(model);
+                    const has4g = /\b4G\b/i.test(model);
+                    const expected = has5g ? 'WIFI+5G版' : (hasLte || has4g) ? 'WIFI+4G版' : 'WIFI版';
+                    const selected = getSelectedValue(['网络制式']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== expected) {
+                        return `网络制式 应为【${expected}】（小米平板），你选了【${selected}】`;
                     }
                     return null;
                 },
