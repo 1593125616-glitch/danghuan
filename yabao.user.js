@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.62
+// @version      0.66
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -62,6 +62,15 @@
         }, 2000);
     }
 
+    function isVisible(el) {
+        if (!el || !el.isConnected) return false;
+        if (el.offsetParent !== null) return true;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
     function copyToClipboard(text) {
         if (!text) return false;
         // GM_setClipboard 不依赖页面焦点，最可靠
@@ -105,6 +114,38 @@
         return walker.nextNode();
     }
 
+    function findAllButtonsByText(textList, container = document.body) {
+        if (!Array.isArray(textList)) textList = [textList];
+        const results = [];
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT, {
+            acceptNode: node => {
+                const tag = node.tagName.toLowerCase();
+                if (['div', 'button', 'a', 'span', 'img', 'input'].includes(tag)) {
+                    const txt = node.textContent || '';
+                    for (let t of textList) if (txt.includes(t)) return NodeFilter.FILTER_ACCEPT;
+                }
+                return NodeFilter.FILTER_SKIP;
+            }
+        });
+        let node;
+        while (node = walker.nextNode()) results.push(node);
+        return results;
+    }
+
+    function findVisibleButtonByText(textList, container = document.body) {
+        const all = findAllButtonsByText(textList, container);
+        for (const el of all) {
+            if (isVisible(el) && el.closest('.confirm-ft, .confirm-bd')) return el;
+        }
+        for (const el of all) {
+            if (el.closest('.confirm-ft, .confirm-bd')) return el;
+        }
+        for (const el of all) {
+            if (isVisible(el)) return el;
+        }
+        return all[0] || null;
+    }
+
     function findCopyLink() {
         const links = document.querySelectorAll('a.confirm-btn.primary');
         for (let link of links) {
@@ -117,7 +158,14 @@
     }
 
     function isInModal(el) {
-        return el && el.closest('.confirm-ft') !== null;
+        if (!el) return false;
+        if (el.closest('.confirm-ft, .confirm-bd')) return true;
+        let p = el.parentElement;
+        while (p) {
+            if (p.getAttribute('role') === 'dialog' || p.getAttribute('aria-modal') === 'true') return true;
+            p = p.parentElement;
+        }
+        return false;
     }
 
     function simpleClick(el) {
@@ -210,6 +258,7 @@
                     if (state.querySerial !== serial) return;
 
                     handleCopyButton(serial);
+                    if (!state.processing) return; // clearAll 已被调用，不再注册新定时器
 
                     const observer = new MutationObserver(() => {
                         if (state.querySerial === serial) handleCopyButton(serial);
@@ -239,7 +288,7 @@
                 }
                 const observer = new MutationObserver(() => {
                     const modal = document.querySelector('.confirm-ft');
-                    if (modal && modal.offsetParent !== null) {
+                    if (modal && isVisible(modal)) {
                         observer.disconnect();
                         startWatchingForCopy(serial);
                     }
@@ -249,7 +298,7 @@
 
                 const interval = setInterval(() => {
                     const modal = document.querySelector('.confirm-ft');
-                    if (modal && modal.offsetParent !== null) {
+                    if (modal && isVisible(modal)) {
                         clearInterval(interval);
                         observer.disconnect();
                         startWatchingForCopy(serial);
@@ -266,8 +315,8 @@
 
             function tryClickGen(serial) {
                 if (state.querySerial !== serial) return false;
-                const genBtn = document.getElementById('initText') || findButtonByText('生成文字');
-                if (!genBtn || genBtn.offsetParent === null) return false;
+                const genBtn = document.getElementById('initText') || findVisibleButtonByText('生成文字');
+                if (!genBtn || !isVisible(genBtn)) return false;
 
                 const inModal = isInModal(genBtn);
                 if (!inModal && !resultContainsIMEI()) {
