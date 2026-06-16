@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.71
+// @version      0.72
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -204,6 +204,8 @@
                 processing: false,
                 querySerial: 0,
                 currentIMEI: '',
+                currentQuery: '',
+                startTime: 0,
                 timers: [],
                 observers: []
             };
@@ -215,10 +217,24 @@
                 state.observers = [];
                 state.processing = false;
                 state.currentIMEI = '';
+                state.currentQuery = '';
+                state.startTime = 0;
             }
 
             function addTimer(id) { state.timers.push(id); }
             function addObserver(obs) { state.observers.push(obs); }
+
+            function getResultAreaText() {
+                const el = document.getElementById('result') || document.getElementById('J_List');
+                return el ? el.innerText : document.body.innerText;
+            }
+
+            function resultContainsQuery() {
+                if (!state.currentQuery) return true;
+                const text = getResultAreaText();
+                if (!text) return false;
+                return text.includes(state.currentIMEI) || text.includes(state.currentQuery);
+            }
 
             function findGenBtn() {
                 let btn = document.getElementById('initText');
@@ -270,6 +286,11 @@
                 if (state.querySerial !== serial) return false;
                 const btn = findGenBtn();
                 if (!btn) return false;
+                // 侧边模式：确认结果包含当前查询内容，避免点到上一台的"生成文字"
+                if (!isInModal(btn) && !resultContainsQuery()) {
+                    log('結果尚未包含當前IMEI/SN，跳過點擊');
+                    return false;
+                }
                 log('✅ 點擊生成文字');
                 simpleClick(btn);
                 startCopyWatch(serial);
@@ -288,11 +309,12 @@
                     if (state.querySerial !== serial) { clearInterval(iv); return; }
                     if (tryClickGen(serial)) clearInterval(iv);
                     else if (++attempts > MAX_ATTEMPTS) { clearInterval(iv); log('未找到生成文字按鈕'); clearAll(); }
+                    else if (attempts % 20 === 0) log(`等待中... attempt ${attempts}`);
                 }, CHECK_INTERVAL);
                 addTimer(iv);
                 const to = setTimeout(() => {
                     if (state.querySerial !== serial) return;
-                    log('結果加載超時');
+                    log(`結果加載超時，已過 ${Date.now() - state.startTime}ms`);
                     clearAll();
                 }, MAX_WAIT);
                 addTimer(to);
@@ -303,13 +325,16 @@
                     clearAll();
                     state.processing = true;
                     state.querySerial++;
+                    state.startTime = Date.now();
                     const input = document.getElementById('search');
-                    state.currentIMEI = input ? input.value.trim() : '';
+                    const query = input ? input.value.trim() : '';
+                    state.currentIMEI = query;
+                    state.currentQuery = query;
                     const serial = state.querySerial;
                     log(`查詢按鈕點擊，序號 ${serial}，IMEI: ${state.currentIMEI}`);
                     let midAttempts = 0;
                     const midIv = setInterval(() => {
-                        for (const t of ['确定', '確定', '是', '查询', '提交', 'OK']) {
+                        for (const t of ['确定', '確定', '是', '提交', 'OK']) {
                             const btn = findButtonByText(t);
                             if (btn) { simpleClick(btn); break; }
                         }
