@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.40
+// @version      1.2.43
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -154,9 +154,10 @@
 
     // ========== 华为平板映射表 ==========
     const huaweiPadModelMapping = {
-        'matepad 10.4英寸 2020款': '华为 MatePad 10.4英寸',
+        'matepad 10.4英寸 2020款': '华为 MatePad 10.4英寸 2022',
         'matepad 10.4英寸 2021款': '华为 MatePad 10.4英寸',
         'matepad 5g 10.4英寸 2020款 5g版': '华为 MatePad 10.4英寸（5G版）',
+        'matepad 5g 10.4英寸 2020款': '华为 MatePad 10.4英寸（5G版）',
         'matepad 10.8吋': '华为 MatePad 10.8英寸',
         'matepad 10.8英寸 2020款': '华为 MatePad 10.8英寸',
         'matepad 11.0英寸 2023款': '华为 MatePad 11英寸 2023',
@@ -196,6 +197,17 @@
         'matepad mini 8.8英寸': '华为 MatePad Mini',
         'matepad mini 悦读版 8.8英寸': '华为 MatePad Mini 悦读版',
         'matepad mini 悦读版 8.8英寸 柔光版': '华为 MatePad Mini 悦读版（柔光版）',
+        '华为平板 m5 8.4英寸 2018': '华为平板 M5 8.4英寸',
+        '华为平板 m5 8.4英寸': '华为平板 M5 8.4英寸',
+        '华为平板 m6 8.4英寸 2019款 高能版': '华为平板 M6 8.4英寸 高能版',
+        '平板 m6 8.4英寸 2021款': '华为平板 M6 8.4英寸',
+        '平板 m6 8.4英寸': '华为平板 M6 8.4英寸',
+        'matepad pro 10.8英寸 lte': '华为 MatePad Pro 10.8英寸 2019款',
+        'mediapad t1 10.0 9.6英寸': '华为 MediaPad T1',
+        'matepad se 10.4英寸 2023款': '华为 MatePad SE 10.4英寸',
+        '华为平板 c5e 10.1英寸': '华为平板 C5e',
+        '华为擎云 c5 8.0英寸': '华为 擎云 C5 8英寸',
+        '华为擎云 c5 8.0英寸 lte': '华为 擎云 C5 8英寸',
     };
 
     // ========== Apple Watch 映射表 ==========
@@ -457,12 +469,15 @@
                   .toLowerCase();
     }
 
-    // ========== 华为平板：从产品描述提取型号 ==========
+    // ========== 华为平板：从产品描述行提取（用于映射表匹配） ==========
     function extractHuaweiPadFromDesc(officialText) {
-        const descLine = extractInfoLine(officialText, '产品描述') || extractInfoLine(officialText, 'Product Description') || '';
+        const descLine = extractInfoLine(officialText, '产品描述') || '';
         if (!descLine) return null;
 
         let extracted = descLine;
+
+        // 华为/荣耀平板将"吋"统一转为"英寸"
+        extracted = extracted.replace(/吋/g, '英寸');
 
         // 去除颜色和存储（从表单中获取）
         const color = getSelectedColor();
@@ -607,33 +622,55 @@
                         }
                     }
 
-                    // ========== 华为平板特殊规则（优先使用产品描述 + 映射表） ==========
-                    if (brand === '华为' && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
-                        // 尝试从产品描述提取型号
+                    // ========== 华为/荣耀平板特殊规则 ==========
+                    if ((brand === '华为' || brand === '荣耀') && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        // 优先从"产品描述"行提取用于映射表匹配
                         const descModel = extractHuaweiPadFromDesc(officialText);
                         if (descModel) {
                             const key = descModel.toLowerCase().replace(/\s+/g, ' ');
                             let expected = huaweiPadModelMapping[key];
 
-                            // 未命中映射时尝试去掉"款"再查
                             if (!expected) {
                                 const keyNoSuffix = key.replace(/款/g, '').trim();
                                 expected = huaweiPadModelMapping[keyNoSuffix];
                             }
 
-                            if (!expected) {
-                                // 不在映射表内，走通用规则：产品描述提取值 + 华为前缀
-                                expected = `华为 ${descModel}`;
+                            if (expected) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
                             }
-
-                            const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
-                            const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
-                            if (userNorm !== expectedNorm) {
-                                return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
-                            }
-                            return null;
                         }
-                        // 如果没有产品描述字段，继续走下面的通用规则
+
+                        // 不在映射表中，从"型号"行提取原始型号
+                        const modelLine = extractInfoLine(officialText, '型号') || '';
+                        if (modelLine) {
+                            let fallback = modelLine.replace(/吋/g, '英寸');
+                            // 先在映射表里查型号行
+                            const modelKey = fallback.toLowerCase().replace(/\s+/g, ' ');
+                            const mappedFromModel = huaweiPadModelMapping[modelKey];
+                            if (mappedFromModel) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(mappedFromModel).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${mappedFromModel}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                            fallback = cleanModelString(fallback);
+                            fallback = fallback.replace(/\s+/g, ' ').trim();
+                            if (fallback) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(fallback).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${fallback}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                        }
                     }
 
                     // ========== 华为特殊规则（手机版） ==========

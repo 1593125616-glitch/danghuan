@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.66
+// @version      0.67
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -315,8 +315,11 @@
 
             function tryClickGen(serial) {
                 if (state.querySerial !== serial) return false;
-                const genBtn = document.getElementById('initText') || findVisibleButtonByText('生成文字');
-                if (!genBtn || !isVisible(genBtn)) return false;
+                let genBtn = document.getElementById('initText');
+                if (!genBtn) {
+                    genBtn = findVisibleButtonByText('生成文字');
+                    if (!genBtn || !isVisible(genBtn)) return false;
+                }
 
                 const inModal = isInModal(genBtn);
                 if (!inModal && !resultContainsIMEI()) {
