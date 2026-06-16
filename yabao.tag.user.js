@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.72
+// @version      0.74
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -9,6 +9,10 @@
 // @match        https://support.oppo.com/*
 // @match        https://support.vivo.com.cn/*
 // @grant        GM_setClipboard
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      cdn.jsdelivr.net
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.tag.user.js
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.tag.user.js
 // ==/UserScript==
@@ -670,4 +674,52 @@
             log('VIVO 監聽器已啟動');
         })();
     }
+
+    // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
+    const YB_CHECK_KEY = 'yabao_last_update_check';
+    const YB_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+    const YB_SCRIPT_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/yabao.tag.user.js';
+
+    function isNewerVer(remote, current) {
+        const r = remote.split('.').map(Number);
+        const c = current.split('.').map(Number);
+        for (let i = 0; i < Math.max(r.length, c.length); i++) {
+            const rv = r[i] || 0, cv = c[i] || 0;
+            if (rv > cv) return true;
+            if (rv < cv) return false;
+        }
+        return false;
+    }
+
+    function shouldCheckUpdate() {
+        if (typeof GM_getValue === 'undefined') return true;
+        const last = GM_getValue(YB_CHECK_KEY, 0);
+        return Date.now() - last >= YB_CHECK_INTERVAL;
+    }
+
+    function markCheckDone() {
+        if (typeof GM_setValue === 'undefined') return;
+        GM_setValue(YB_CHECK_KEY, Date.now());
+    }
+
+    function checkYbUpdate() {
+        if (!shouldCheckUpdate() || typeof GM_xmlhttpRequest === 'undefined') return;
+        GM_xmlhttpRequest({
+            method: 'GET', url: YB_SCRIPT_URL,
+            onload: (resp) => {
+                markCheckDone();
+                const m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) return;
+                if (isNewerVer(m[1], GM_info.script.version)) {
+                    log(`检测到新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
+                    if (confirm(`鸭宝脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
+                        window.location.href = YB_SCRIPT_URL;
+                    }
+                }
+            }
+        });
+    }
+
+    checkYbUpdate();
+    setInterval(checkYbUpdate, YB_CHECK_INTERVAL);
 })();

@@ -1,12 +1,16 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.71
+// @version      1.7.73
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        GM_getClipboard
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      cdn.jsdelivr.net
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // ==/UserScript==
@@ -1951,4 +1955,46 @@
         clearTimeout(checkTimer);
     });
     window.addEventListener('load', () => setTimeout(() => { try { check(true); } catch (e) { console.error('[质检] load check 异常:', e); } }, 800));
+
+    // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
+    const SUK_CK_KEY = 'suk_last_update_check';
+    const SUK_CK_INTERVAL = 6 * 60 * 60 * 1000;
+    const SUK_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js';
+
+    function isNewerVer(remote, current) {
+        const r = remote.split('.').map(Number);
+        const c = current.split('.').map(Number);
+        for (let i = 0; i < Math.max(r.length, c.length); i++) {
+            const rv = r[i] || 0, cv = c[i] || 0;
+            if (rv > cv) return true;
+            if (rv < cv) return false;
+        }
+        return false;
+    }
+
+    function shouldCheck(key) {
+        if (typeof GM_getValue === 'undefined') return true;
+        return Date.now() - GM_getValue(key, 0) >= SUK_CK_INTERVAL;
+    }
+    function markDone(key) { if (typeof GM_setValue !== 'undefined') GM_setValue(key, Date.now()); }
+
+    function checkSukUpdate() {
+        if (!shouldCheck(SUK_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
+        GM_xmlhttpRequest({
+            method: 'GET', url: SUK_URL,
+            onload: (resp) => {
+                markDone(SUK_CK_KEY);
+                const m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) return;
+                if (isNewerVer(m[1], GM_info.script.version)) {
+                    console.warn(`[质检] 发现新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
+                    if (confirm(`功能脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
+                        window.location.href = SUK_URL;
+                    }
+                }
+            }
+        });
+    }
+    checkSukUpdate();
+    setInterval(checkSukUpdate, SUK_CK_INTERVAL);
 })();
