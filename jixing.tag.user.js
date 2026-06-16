@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.52
+// @version      1.2.53
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -576,7 +576,7 @@
                                 raw = cleanAppleWatchModel(raw);
                             }
                             if (/OPPO/i.test(brand) && (category === '手表' || category === '智能手表')) {
-                                raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版/gi, ' ').replace(/\s+/g, ' ').trim();
+                                raw = raw.replace(/ECG版|理想汽车定制版|名侦探柯南限定版|精钢版|故宫新禧版|英雄联盟限定版|EVA限定版|NFC版|高尔夫定制版|MG汽车定制版|深灰版/gi, ' ').replace(/\s+/g, ' ').trim();
                             }
                             if (/三星|Samsung/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 raw = raw.replace(/Bespoke\s*蓝牙\/?/gi, ' ').replace(/\s*版\s*/gi, ' ').replace(/\s+/g, ' ').trim();
