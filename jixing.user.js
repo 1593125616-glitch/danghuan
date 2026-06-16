@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.43
+// @version      1.2.48
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -208,6 +208,15 @@
         '华为平板 c5e 10.1英寸': '华为平板 C5e',
         '华为擎云 c5 8.0英寸': '华为 擎云 C5 8英寸',
         '华为擎云 c5 8.0英寸 lte': '华为 擎云 C5 8英寸',
+    };
+
+    // ========== 荣耀平板映射表 ==========
+    const honorPadModelMapping = {
+        '荣耀平板9 12.1英寸': '荣耀平板9',
+        '荣耀平板magicpad2 12.3英寸': '荣耀平板 MagicPad 2',
+        '荣耀平板x9 pro 11.5英寸': '荣耀平板 X9 Pro',
+        '荣耀magicpad3 12.5 柔光版 12.5英寸': '荣耀 MagicPad 3 12.5英寸 柔光版',
+        '荣耀magicpad3 pro 13.3 13.3英寸': '荣耀 MagicPad 3 Pro 13.3英寸',
     };
 
     // ========== Apple Watch 映射表 ==========
@@ -425,7 +434,7 @@
         // 去除 AI版（含空格或不含空格）
         cleaned = cleaned.replace(/AI\s*版/gi, ' ');
         // 去除 WiFi版 / WIFI版 / Wi-Fi版（含空格或不含空格）
-        cleaned = cleaned.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        cleaned = cleaned.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版\s*本?/gi, ' ');
         cleaned = cleaned.replace(/细闪|素皮|无充电器版|广东|陶瓷|冠军版深|虎年礼盒|龙鳞纤维版|公开版/gi, ' ');
         if (/苹果|Apple/i.test(brand) && (category === '手表' || category === '智能手表')) {
             cleaned = cleanAppleWatchModel(cleaned);
@@ -492,7 +501,7 @@
         }
 
         // 去除 WiFi版 / LTE版 / 演示样机
-        extracted = extracted.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        extracted = extracted.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版\s*本?/gi, ' ');
         extracted = extracted.replace(/LTE版/gi, ' ');
         extracted = extracted.replace(/演示样机/gi, ' ');
 
@@ -538,6 +547,9 @@
                                 raw = raw.replace(/\bNubia\b/gi, '努比亚').replace(/\bRed\s*Magic\b/gi, '红魔').replace(/\bREDMAGIC\b/gi, '红魔');
                             }
                             raw = forceTruncateAtKeywords(raw);
+                            if ((brand === '华为' || brand === '荣耀') && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                                raw = raw.replace(/吋/g, '英寸');
+                            }
                             if (/小米|Xiaomi|Redmi|红米/i.test(brand) && (category === '手表' || category === '智能手表')) {
                                 const mmTrunc = raw.match(/^(.+?\d+\s*mm)/i);
                                 if (mmTrunc) raw = mmTrunc[1];
@@ -622,8 +634,8 @@
                         }
                     }
 
-                    // ========== 华为/荣耀平板特殊规则 ==========
-                    if ((brand === '华为' || brand === '荣耀') && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                    // ========== 华为平板特殊规则 ==========
+                    if (brand === '华为' && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
                         // 优先从"产品描述"行提取用于映射表匹配
                         const descModel = extractHuaweiPadFromDesc(officialText);
                         if (descModel) {
@@ -649,9 +661,16 @@
                         const modelLine = extractInfoLine(officialText, '型号') || '';
                         if (modelLine) {
                             let fallback = modelLine.replace(/吋/g, '英寸');
-                            // 先在映射表里查型号行
+                            // 先在映射表里查型号行（多格式兼容）
                             const modelKey = fallback.toLowerCase().replace(/\s+/g, ' ');
-                            const mappedFromModel = huaweiPadModelMapping[modelKey];
+                            let mappedFromModel = huaweiPadModelMapping[modelKey];
+                            if (!mappedFromModel) {
+                                const noSpace = modelKey.replace(/\s+/g, '');
+                                mappedFromModel = huaweiPadModelMapping[noSpace];
+                            }
+                            if (!mappedFromModel && brand === '华为' && !modelKey.startsWith('华为')) {
+                                mappedFromModel = huaweiPadModelMapping['华为' + modelKey] || huaweiPadModelMapping['华为' + modelKey.replace(/\s+/g, '')];
+                            }
                             if (mappedFromModel) {
                                 const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
                                 const expectedNorm = normalizeModelForCompare(mappedFromModel).toLowerCase();
@@ -667,6 +686,36 @@
                                 const expectedNorm = normalizeModelForCompare(fallback).toLowerCase();
                                 if (userNorm !== expectedNorm) {
                                     return `机型 应为【${fallback}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                        }
+                    }
+
+                    // ========== 荣耀平板特殊规则（从型号行提取） ==========
+                    if (brand === '荣耀' && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        const modelLine = extractInfoLine(officialText, '型号') || '';
+                        if (modelLine) {
+                            let model = modelLine.replace(/吋/g, '英寸');
+                            // 先走通用清洗，去掉WIFI/LTE/颜色等，再查映射表
+                            model = cleanModelString(model);
+                            model = model.replace(/\s+/g, ' ').trim();
+                            const key = model.toLowerCase().replace(/\s+/g, ' ');
+                            let expected = honorPadModelMapping[key];
+                            if (expected) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(expected).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
+                                }
+                                return null;
+                            }
+                            // 不在映射表中，直接用清洗后的值
+                            if (model) {
+                                const userNorm = normalizeModelForCompare(originalSelectedVal).toLowerCase();
+                                const expectedNorm = normalizeModelForCompare(model).toLowerCase();
+                                if (userNorm !== expectedNorm) {
+                                    return `机型 应为【${model}】，你选了【${originalSelectedVal}】`;
                                 }
                                 return null;
                             }
@@ -989,8 +1038,8 @@
         raw = raw.replace(/32MB\+/gi, ' ');
         raw = raw.replace(/8MB\+/gi, ' ');
         raw = raw.replace(/\b(VIN|OBS|CELL),?\s*/gi, ' ');
-        // 先吞掉 "WiFi版/WIFI版/Wi-Fi版"（含中间空格），避免留下孤立的 "版"
-        raw = raw.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版/gi, ' ');
+        // 先吞掉 "WiFi版/WIFI版/Wi-Fi版/WiFi版本"（含中间空格），避免留下孤立的 "版" 或 "本"
+        raw = raw.replace(/(?:Wi-Fi|WIFI|WiFi|wifi)\s*版\s*本?/gi, ' ');
         // 原有的 WiFi 各写法替换
         raw = raw.replace(/Wi-Fi\s*\+\s*移动网络/gi, ' ');
         raw = raw.replace(/\+ 移动网络/gi, ' ');
