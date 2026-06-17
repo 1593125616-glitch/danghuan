@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.73
+// @version      1.7.75
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -164,7 +164,7 @@
     }
 
     const CONFIG = {
-        areaSelectors: ['.yabao-report-detail', '.report-info', '.info-content', '.right-info'],
+        areaSelectors: [],
         items: [
             {
                 name: '颜色',
@@ -327,13 +327,24 @@
                         if (comboMatch) {
                             let u1 = (comboMatch[2] || 'GB').toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
                             let u2 = (comboMatch[4] || 'GB').toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
-                            return comboMatch[1] + u1 + '+' + comboMatch[3] + u2;
+                            let v1 = parseInt(comboMatch[1]), v2 = parseInt(comboMatch[3]);
+                            // 1024GB → 1TB, 2048GB → 2TB, 同理反向
+                            if (u1 === 'GB' && v1 >= 1024 && v1 % 1024 === 0) { u1 = 'TB'; v1 = v1 / 1024; }
+                            if (u2 === 'GB' && v2 >= 1024 && v2 % 1024 === 0) { u2 = 'TB'; v2 = v2 / 1024; }
+                            if (u1 === 'TB' && v1 * 1024 <= 999999) { u1 = 'GB'; v1 = v1 * 1024; }
+                            if (u2 === 'TB' && v2 * 1024 <= 999999) { u2 = 'GB'; v2 = v2 * 1024; }
+                            return v1 + u1 + '+' + v2 + u2;
                         }
                         const spaceMatch = str.match(/^(\d+)\s*(GB|G|TB|T)?\s+(\d+)\s*(GB|G|TB|T)?$/i);
                         if (spaceMatch) {
                             let u1 = (spaceMatch[2] || 'GB').toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
                             let u2 = (spaceMatch[4] || 'GB').toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
-                            return spaceMatch[1] + u1 + '+' + spaceMatch[3] + u2;
+                            let v1 = parseInt(spaceMatch[1]), v2 = parseInt(spaceMatch[3]);
+                            if (u1 === 'GB' && v1 >= 1024 && v1 % 1024 === 0) { u1 = 'TB'; v1 = v1 / 1024; }
+                            if (u2 === 'GB' && v2 >= 1024 && v2 % 1024 === 0) { u2 = 'TB'; v2 = v2 / 1024; }
+                            if (u1 === 'TB' && v1 * 1024 <= 999999) { u1 = 'GB'; v1 = v1 * 1024; }
+                            if (u2 === 'TB' && v2 * 1024 <= 999999) { u2 = 'GB'; v2 = v2 * 1024; }
+                            return v1 + u1 + '+' + v2 + u2;
                         }
                         const singleMatch = str.match(/^(\d+)\s*(GB|G|TB|T)$/i);
                         if (singleMatch) {
