@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.75
+// @version      1.7.77
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -100,8 +100,8 @@
 
     // ==================== 华为手表颜色规则 ====================
     const huaweiWatchColorRules = [
-        // 硬性颜色规则（查询颜色包含"/"的精确映射）
-        { keywords: ['曜石黑', '黑色氟橡胶表带'], expected: '曜石黑' },
+        // 曜石黑/黑色氟橡胶表带 → 黑色 或 曜石黑 均可
+        { keywords: ['曜石黑', '黑色氟橡胶表带'], expected: ['黑色', '曜石黑'] },
         { keywords: ['银河紫', '紫色航天级钛合金表壳', '紫色素皮复合表带'], expected: '银河紫' },
         { keywords: ['钛空银', '航天级钛合金表壳', '钛金属表带'], expected: '钛空银' },
         { keywords: ['苍穹黑', '深锖色不锈钢表壳', '黑色氟橡胶表带'], expected: '苍穹黑' },
@@ -397,6 +397,9 @@
                     const isApple = /苹果|Apple/i.test(brand);
                     const model = getInputValueByLabel('机型') || getField('型号');
 
+                    // 非大陆国行 ≡ 非国行（用于后续对比）
+                    const normSelected = selectedVal === '非大陆国行' ? '非国行' : selectedVal;
+
                     // 是否国行: 无 时跳过检测
                     const domesticCheck = getField('版本类型') || getField('是否国行');
                     if (domesticCheck === '无') return null;
@@ -514,7 +517,7 @@
                                         return null;
                                     }
                                     if (isDomestic !== '国行') {
-                                        if (selectedVal !== '非国行')
+                                        if (normSelected !== '非国行')
                                             return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
                                         return null;
                                     }
@@ -546,7 +549,7 @@
                                         if (selectedVal !== '大陆国行')
                                             return `购买渠道 应为【大陆国行】（版本：${versionField}），你选了【${selectedVal}】`;
                                     } else {
-                                        if (selectedVal !== '非国行')
+                                        if (normSelected !== '非国行')
                                             return `购买渠道 应为【非国行】（版本：${versionField}），你选了【${selectedVal}】`;
                                     }
                                     return null;
@@ -586,12 +589,12 @@
                             }
                             // 特定国家映射→非国行
                             if (/阿爾及利亞|英國|菲律賓/i.test(isDomestic) &&
-                                selectedVal !== '非国行') {
+                                normSelected !== '非国行') {
                                 return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
                             }
                             // 非国行/非大陆
                             if (isDomestic.includes('非国行') || isDomestic.includes('非大陆')) {
-                                if (selectedVal !== '非国行')
+                                if (normSelected !== '非国行')
                                     return `购买渠道 应为【非国行】，你选了【${selectedVal}】`;
                                 return null;
                             }
@@ -603,7 +606,7 @@
                                     if (selectedVal !== '港澳台版')
                                         return `购买渠道 应为【港澳台版】（${isDomestic}），你选了【${selectedVal}】`;
                                 } else {
-                                    if (selectedVal !== '非国行')
+                                    if (normSelected !== '非国行')
                                         return `购买渠道 应为【非国行】（${isDomestic}），你选了【${selectedVal}】`;
                                 }
                                 return null;
@@ -631,7 +634,7 @@
                                         return `购买渠道 应为【大陆国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
                                 }
                             } else {
-                                if (selectedVal !== '非国行')
+                                if (normSelected !== '非国行')
                                     return `购买渠道 应为【非国行】（购买地点：${purchaseLocation}），你选了【${selectedVal}】`;
                             }
                             return null;
