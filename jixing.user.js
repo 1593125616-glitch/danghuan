@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.53
+// @version      1.2.54
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -533,7 +533,7 @@
     }
 
     const CONFIG = {
-        areaSelectors: ['.yabao-report-detail', '.report-info', '.info-content', '.right-info'],
+        areaSelectors: [],
         items: [
             {
                 name: '机型',
