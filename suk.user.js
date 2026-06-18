@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.77
+// @version      1.7.78
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1825,7 +1825,9 @@
             clipboardOfficialText = text.trim();
             clipboardUpdateTime = Date.now();
             retryCount = 0;
-            check(true);
+            // 先自动勾选Y线保修，等DOM更新后再执行对比
+            autoCheckWarrantyForYLine(clipboardOfficialText);
+            setTimeout(() => check(true), 200);
             showTemporaryMessage('✅ 已读取剪贴板信息，正在对比');
         };
         document.body.appendChild(readBtn);
@@ -1893,6 +1895,122 @@
     function hideNoAnomalyMessage() {
         document.querySelectorAll('.suk-no-anomaly').forEach(el => el.remove());
     }
+
+    // ==================== Y线自动勾选保修时长 ====================
+    function autoCheckWarrantyForYLine(sourceText) {
+        const brand = getInputValueByLabel('品牌');
+        if (!brand) return;
+        const detLine = getInputValueByLabel('检测线');
+        if (!detLine || detLine.trim() !== 'Y线') return;
+
+        // 获取保修结束日期/激活日期
+        const officialSrc = sourceText || clipboardOfficialText || getPageText() || '';
+        if (!officialSrc) return;
+        const datePatterns = [
+            { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
+            { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /保修截止日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /预估保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /保修状态[：:]\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/i, handler: (m) => `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` },
+        ];
+        let endDate = null;
+        for (const p of datePatterns) {
+            const m = officialSrc.match(p.regex);
+            if (m) { endDate = parseDateLocal(p.handler(m)); break; }
+        }
+
+        if (!endDate || isNaN(endDate)) {
+            const actMatch = officialSrc.match(/激活(?:日期|时间)[：:]\s*(?:已于\s*)?(\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2})/i);
+            if (actMatch) {
+                let actStr = actMatch[1].replace(/年/g,'-').replace(/月/g,'-').replace(/日/g,'').replace(/\//g,'-');
+                endDate = parseDateLocal(actStr);
+                if (endDate) endDate.setFullYear(endDate.getFullYear() + 1);
+            }
+        }
+
+        let diffDays = null;
+        if (endDate && !isNaN(endDate)) {
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            endDate.setHours(0,0,0,0);
+            diffDays = Math.floor((endDate - now) / (1000 * 60 * 60 * 24));
+        } else {
+            // 激活日期未激活或不存在，默认小于30天
+            diffDays = -1;
+        }
+
+        // 查找保修选项并点击
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const text = label.textContent.trim();
+            if (/保修时长|保修剩余|保修状态|保修期/.test(text)) {
+                const content = label.nextElementSibling;
+                if (!content) continue;
+                const options = content.querySelectorAll('.el-radio-button__inner');
+                if (options.length === 0) break;
+
+                // 根据实际可用选项选择匹配项
+                const optTexts = [...options].map(o => o.textContent.trim());
+                let expectedText = '';
+
+                if (diffDays < 30) {
+                    // 优先选"<30天"
+                    const match = optTexts.find(t => t.includes('<30') || t.includes('小于30') || t.includes('30天以内'));
+                    if (match) expectedText = match;
+                } else {
+                    // ≥30天：优先选具体区间，没有则选"≥30天"
+                    if (diffDays < 110) {
+                        const match = optTexts.find(t => t.includes('110'));
+                        if (match) expectedText = match;
+                    } else if (diffDays < 190) {
+                        const match = optTexts.find(t => t.includes('190'));
+                        if (match) expectedText = match;
+                    } else if (diffDays < 250) {
+                        const match = optTexts.find(t => t.includes('250'));
+                        if (match) expectedText = match;
+                    } else if (diffDays < 330) {
+                        const match = optTexts.find(t => t.includes('330'));
+                        if (match) expectedText = match;
+                    }
+                    if (!expectedText) {
+                        const match = optTexts.find(t => t.includes('≥30') || t.includes('>=30') || t.includes('30天以上'));
+                        if (match) expectedText = match;
+                    }
+                }
+                // 兜底：直接匹配"保修时长<30天"或"保修时长≥30天"
+                if (!expectedText) {
+                    if (diffDays < 30) expectedText = '保修时长<30天';
+                    else expectedText = '保修时长≥30天';
+                }
+
+                for (const opt of options) {
+                    if (opt.textContent.trim() === expectedText) {
+                        const parent = opt.closest('.el-radio-button');
+                        if (parent && !parent.classList.contains('is-active')) {
+                            opt.click();
+                            console.log('[Y线] 自动勾选:', expectedText);
+                        }
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // Y线自动勾选：页面加载后执行，同时轮询检测线变化
+    let lastDetLine = '';
+    function initYLineAutoCheck() {
+        setTimeout(autoCheckWarrantyForYLine, 1500);
+        setInterval(() => {
+            const current = getInputValueByLabel('检测线');
+            if (current !== lastDetLine) {
+                lastDetLine = current;
+                setTimeout(autoCheckWarrantyForYLine, 300);
+            }
+        }, 2000);
+    }
+    initYLineAutoCheck();
 
     // ==================== 监听"开始检测"或"提交"按钮，清空所有对比缓存 ====================
     document.addEventListener('click', function(e) {
