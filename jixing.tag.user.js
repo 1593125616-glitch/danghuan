@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.55
+// @version      1.2.56
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -164,6 +164,7 @@
         'matepad 5g 10.4英寸 2020款': '华为 MatePad 10.4英寸（5G版）',
         'matepad 10.8吋': '华为 MatePad 10.8英寸',
         'matepad 10.8英寸 2020款': '华为 MatePad 10.8英寸',
+        'matepad 11 10.95英寸': '华为 MatePad 11',
         'matepad 11.0英寸 2023款': '华为 MatePad 11英寸 2023',
         'matepad 11.0英寸 2023款 柔光版': '华为 MatePad 11英寸 2023（柔光版）',
         'matepad 11.5"s 灵动款': '华为 MatePad 11.5S 2024款（灵动版）',

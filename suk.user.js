@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.78
+// @version      1.7.86
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -473,7 +473,7 @@
 
                         if (expected) {
                             // Apple Watch: 非国行 → 非大陆国行
-                            if (/苹果|Apple/i.test(brand)) {
+                    if (/苹果|Apple/i.test(brand) && category === '平板') {
                                 const watchCategory = getInputValueByLabel('品类');
                                 if (watchCategory === '智能手表' || watchCategory === '手表') {
                                     if (expected === '非国行') expected = '非大陆国行';
@@ -693,40 +693,23 @@
                     if (!endDate || isNaN(endDate)) {
                         const warrantyStatusField = extractField(officialText, '保修状态');
                         if (warrantyStatusField && warrantyStatusField.includes('已过保')) {
-                            const allLabels = document.querySelectorAll('.el-form-item__label');
-                            let warrantyOptionCount = 0;
-                            for (const label of allLabels) {
-                                const text = label.textContent.trim();
-                                if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态') || text.includes('保修期')) {
-                                    const content = label.nextElementSibling;
-                                    if (content) {
-                                        const options = content.querySelectorAll('.el-radio-button__inner');
-                                        warrantyOptionCount = options.length;
-                                        break;
+                            // 检测是否为"一个月"模板
+                            let isMonthTemplate = false;
+                            const ls = document.querySelectorAll('.el-form-item__label');
+                            for (const l of ls) {
+                                const t = l.textContent.trim();
+                                if (/保修时长|保修剩余|保修状态|保修期/.test(t)) {
+                                    const opts = l.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
+                                    if (opts && opts.length === 2) {
+                                        const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
+                                        if (t0.includes('一个月') || t1.includes('一个月')) isMonthTemplate = true;
                                     }
+                                    break;
                                 }
                             }
-                            if (warrantyOptionCount === 2) {
-                                let labelB = '保修时长<30天';
-                                for (const l of document.querySelectorAll('.el-form-item__label')) {
-                                    const t = l.textContent.trim();
-                                    if (t.includes('保修时长') || t.includes('保修剩余') || t.includes('保修状态') || t.includes('保修期')) {
-                                        const opts = l.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
-                                        if (opts && opts.length === 2) {
-                                            const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
-                                            if (t0.includes('一个月') || t1.includes('一个月')) {
-                                                labelB = '保修期一个月内或过保';
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
-                                if (selectedVal !== labelB)
-                                    return `保修状态 应为【${labelB}】（已过保），你选了【${selectedVal}】`;
-                                return null;
-                            }
-                            if (selectedVal !== '保修时长<30天')
-                                return `保修状态 应为【保修时长<30天】（已过保），你选了【${selectedVal}】`;
+                            const expected = isMonthTemplate ? '保修期一个月内或过保' : '保修时长<30天';
+                            if (selectedVal !== expected)
+                                return `保修状态 应为【${expected}】（已过保），你选了【${selectedVal}】`;
                             return null;
                         }
                         return null;
@@ -736,40 +719,26 @@
                     today.setHours(0, 0, 0, 0);
                     const diffDays = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
 
+                    // 检测是否为"一个月"模板（2选项）
+                    let isMonthTemplate = false;
                     const allLabels = document.querySelectorAll('.el-form-item__label');
-                    let warrantyOptionCount = 0;
                     for (const label of allLabels) {
                         const text = label.textContent.trim();
-                        if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态')) {
-                            const content = label.nextElementSibling;
-                            if (content) {
-                                const options = content.querySelectorAll('.el-radio-button__inner');
-                                warrantyOptionCount = options.length;
-                                break;
+                        if (/保修时长|保修剩余|保修状态|保修期/.test(text)) {
+                            const opts = label.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
+                            if (opts && opts.length === 2) {
+                                const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
+                                if (t0.includes('一个月') || t1.includes('一个月')) {
+                                    isMonthTemplate = true;
+                                }
                             }
+                            break;
                         }
                     }
-                    if (warrantyOptionCount === 2) {
-                        // 检测实际模板选项名称
-                        let labelA = '保修时长≥30天', labelB = '保修时长<30天';
-                        for (const label of document.querySelectorAll('.el-form-item__label')) {
-                            const text = label.textContent.trim();
-                        if (text.includes('保修时长') || text.includes('保修剩余') || text.includes('保修状态') || text.includes('保修期')) {
-                                const opts = label.nextElementSibling?.querySelectorAll('.el-radio-button__inner');
-                                if (opts && opts.length === 2) {
-                                    const t0 = getCleanOptionText(opts[0]), t1 = getCleanOptionText(opts[1]);
-                                    if (t0.includes('一个月') || t1.includes('一个月')) {
-                                        labelA = '保修期一个月以上';
-                                        labelB = '保修期一个月内或过保';
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                        if (diffDays >= 30 && selectedVal !== labelA)
-                            return `保修状态 应为【${labelA}】（剩余${diffDays}天），你选了【${selectedVal}】`;
-                        if (diffDays < 30 && selectedVal !== labelB)
-                            return `保修状态 应为【${labelB}】（剩余${diffDays}天），你选了【${selectedVal}】`;
+                    if (isMonthTemplate) {
+                        const expected = diffDays >= 30 ? '保修期一个月以上' : '保修期一个月内或过保';
+                        if (selectedVal !== expected)
+                            return `保修状态 应为【${expected}】（剩余${diffDays}天），你选了【${selectedVal}】`;
                         return null;
                     }
 
@@ -955,8 +924,8 @@
                     }
 
                     if (/苹果|Apple/i.test(brand)) {
-                        const model = getInputValueByLabel('机型') || getField('型号');
-                        if (!model || !/iPad/i.test(model)) return null;
+                        const wifiMobile = getField('是否WiFi+移动网络');
+                        if (!wifiMobile) return null;
 
                         let selected = '';
                         const allLabels = document.querySelectorAll('.el-form-item__label');
@@ -972,9 +941,6 @@
                             }
                         }
                         if (!selected || /不检测|跳过/i.test(selected)) return null;
-
-                        const wifiMobile = getField('是否WiFi+移动网络');
-                        if (!wifiMobile) return null;
 
                         const cleanWifiMobile = wifiMobile.trim().toLowerCase();
                         if (cleanWifiMobile === '否' || cleanWifiMobile.includes('否')) {
@@ -1716,6 +1682,7 @@
                 return;
             }
             retryCount = 0;
+            autoSelectFields(txt);
 
             const brand = getInputValueByLabel('品牌');
             const category = getInputValueByLabel('品类');
@@ -1827,6 +1794,7 @@
             retryCount = 0;
             // 先自动勾选Y线保修，等DOM更新后再执行对比
             autoCheckWarrantyForYLine(clipboardOfficialText);
+            autoSelectFields(clipboardOfficialText, true);
             setTimeout(() => check(true), 200);
             showTemporaryMessage('✅ 已读取剪贴板信息，正在对比');
         };
@@ -1949,38 +1917,39 @@
                 const options = content.querySelectorAll('.el-radio-button__inner');
                 if (options.length === 0) break;
 
-                // 根据实际可用选项选择匹配项
                 const optTexts = [...options].map(o => o.textContent.trim());
                 let expectedText = '';
 
-                if (diffDays < 30) {
-                    // 优先选"<30天"
-                    const match = optTexts.find(t => t.includes('<30') || t.includes('小于30') || t.includes('30天以内'));
-                    if (match) expectedText = match;
-                } else {
-                    // ≥30天：优先选具体区间，没有则选"≥30天"
-                    if (diffDays < 110) {
-                        const match = optTexts.find(t => t.includes('110'));
-                        if (match) expectedText = match;
-                    } else if (diffDays < 190) {
-                        const match = optTexts.find(t => t.includes('190'));
-                        if (match) expectedText = match;
-                    } else if (diffDays < 250) {
-                        const match = optTexts.find(t => t.includes('250'));
-                        if (match) expectedText = match;
-                    } else if (diffDays < 330) {
-                        const match = optTexts.find(t => t.includes('330'));
-                        if (match) expectedText = match;
-                    }
-                    if (!expectedText) {
-                        const match = optTexts.find(t => t.includes('≥30') || t.includes('>=30') || t.includes('30天以上'));
-                        if (match) expectedText = match;
+                if (options.length === 2) {
+                    const t0 = options[0].textContent.trim(), t1 = options[1].textContent.trim();
+                    if (t0.includes('一个月') || t1.includes('一个月')) {
+                        expectedText = diffDays >= 30 ? '保修期一个月以上' : '保修期一个月内或过保';
                     }
                 }
-                // 兜底：直接匹配"保修时长<30天"或"保修时长≥30天"
+
+                if (!expectedText && diffDays < 30) {
+                    const match = optTexts.find(t => t.includes('<30') || t.includes('小于30') || t.includes('30天以内'));
+                    if (match) expectedText = match;
+                } else if (!expectedText && diffDays < 110) {
+                    const match = optTexts.find(t => t.includes('<110'));
+                    if (match) expectedText = match;
+                } else if (!expectedText && diffDays < 190) {
+                    const match = optTexts.find(t => t.includes('<190'));
+                    if (match) expectedText = match;
+                } else if (!expectedText && diffDays < 250) {
+                    const match = optTexts.find(t => t.includes('<250'));
+                    if (match) expectedText = match;
+                } else if (!expectedText && diffDays < 330) {
+                    const match = optTexts.find(t => t.includes('<330'));
+                    if (match) expectedText = match;
+                } else if (!expectedText) {
+                    const match = optTexts.find(t => t.includes('≥330'));
+                    if (match) expectedText = match;
+                }
                 if (!expectedText) {
                     if (diffDays < 30) expectedText = '保修时长<30天';
-                    else expectedText = '保修时长≥30天';
+                    else if (diffDays < 330) expectedText = '保修时长≥30天';
+                    else expectedText = '保修时长≥330天';
                 }
 
                 for (const opt of options) {
@@ -1995,6 +1964,666 @@
                 }
                 break;
             }
+        }
+    }
+
+    // ==================== 自动勾选字段（手机/平板/智能手表） ====================
+
+    function isOptionAlreadySelected(optionEl) {
+        const parent = optionEl.closest('.el-radio-button');
+        return parent && parent.classList.contains('is-active');
+    }
+
+    function showAutoBadge(labelPatterns, text) {
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const labelText = label.textContent.trim();
+            const matched = Array.isArray(labelPatterns)
+                ? labelPatterns.some(p => labelText === p || labelText.includes(p))
+                : (labelText === labelPatterns || labelText.includes(labelPatterns));
+            if (!matched) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const existing = content.querySelector('.suk-auto-badge');
+            if (existing) existing.remove();
+            const badge = document.createElement('div');
+            badge.className = 'suk-auto-badge';
+            badge.textContent = '\u81ea\u52a8\u52fe\u9009\u4e86' + text;
+            badge.style.cssText = 'color:#06c; font-size:12px; padding:1px 0; white-space:nowrap; line-height:1.3;';
+            content.insertBefore(badge, content.firstChild);
+            break;
+        }
+    }
+
+    function findLabelAndClick(labelPatterns, expectedText, badgeText) {
+        if (!expectedText) return false;
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        const normExpected = expectedText.replace(/\s+/g, '').toLowerCase();
+        for (const label of allLabels) {
+            const labelText = label.textContent.trim();
+            const matched = Array.isArray(labelPatterns)
+                ? labelPatterns.some(p => labelText === p || labelText.includes(p))
+                : (labelText === labelPatterns || labelText.includes(labelPatterns));
+            if (!matched) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+            if (options.length === 0) return false;
+            for (const opt of options) {
+                const optText = getCleanOptionText(opt);
+                const normOpt = optText.replace(/\s+/g, '').toLowerCase();
+                if (normOpt === normExpected) {
+                    if (!isOptionAlreadySelected(opt)) {
+                        opt.click();
+                        console.log('[自动勾选] ' + labelText + ' \u2192 ' + expectedText);
+                    }
+                    if (badgeText) showAutoBadge(labelPatterns, badgeText);
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
+    }
+
+    function autoSelectWarranty(sourceText) {
+        const datePatterns = [
+            { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
+            { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /保修截止日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /预估保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+            { regex: /保修状态[：:]\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/i, handler: (m) => `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` },
+        ];
+        let endDate = null;
+        for (const p of datePatterns) {
+            const m = sourceText.match(p.regex);
+            if (m) { endDate = parseDateLocal(p.handler(m)); break; }
+        }
+        if (!endDate || isNaN(endDate)) {
+            const actMatch = sourceText.match(/激活(?:日期|时间)[：:]\s*(?:已于\s*)?(\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2})/i);
+            if (actMatch) {
+                let actStr = actMatch[1].replace(/年/g,'-').replace(/月/g,'-').replace(/日/g,'').replace(/\//g,'-');
+                endDate = parseDateLocal(actStr);
+                if (endDate) endDate.setFullYear(endDate.getFullYear() + 1);
+            }
+        }
+
+        let diffDays = null;
+        if (endDate && !isNaN(endDate)) {
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            endDate.setHours(0,0,0,0);
+            diffDays = Math.floor((endDate - now) / (1000 * 60 * 60 * 24));
+        } else {
+            const warrantyStatusField = extractField(sourceText, '保修状态');
+            if (warrantyStatusField && warrantyStatusField.includes('已过保')) diffDays = -1;
+            else return;
+        }
+
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const text = label.textContent.trim();
+            if (!/保修时长|保修剩余|保修状态|保修期/.test(text)) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+            if (options.length === 0) break;
+
+            const optTexts = [...options].map(o => getCleanOptionText(o));
+            let expectedText = '';
+
+            if (options.length === 2) {
+                const t0 = getCleanOptionText(options[0]), t1 = getCleanOptionText(options[1]);
+                if (t0.includes('一个月') || t1.includes('一个月')) {
+                    expectedText = diffDays >= 30 ? '保修期一个月以上' : '保修期一个月内或过保';
+                }
+            }
+
+            if (!expectedText && diffDays < 30) {
+                const match = optTexts.find(t => t.includes('<30') || t.includes('小于30') || t.includes('30天以内'));
+                if (match) expectedText = match;
+            } else if (diffDays < 110) {
+                const match = optTexts.find(t => t.includes('<110'));
+                if (match) expectedText = match;
+            } else if (diffDays < 190) {
+                const match = optTexts.find(t => t.includes('<190'));
+                if (match) expectedText = match;
+            } else if (diffDays < 250) {
+                const match = optTexts.find(t => t.includes('<250'));
+                if (match) expectedText = match;
+            } else if (diffDays < 330) {
+                const match = optTexts.find(t => t.includes('<330'));
+                if (match) expectedText = match;
+            } else {
+                const match = optTexts.find(t => t.includes('\u2265330'));
+                if (match) expectedText = match;
+            }
+            if (!expectedText) {
+                if (diffDays < 30) expectedText = '保修时长<30天';
+                else if (diffDays < 330) expectedText = '保修时长\u226530天';
+                else expectedText = '保修时长\u2265330天';
+            }
+
+            for (const opt of options) {
+                if (getCleanOptionText(opt) === expectedText) {
+                    const parent = opt.closest('.el-radio-button');
+                    if (parent && !parent.classList.contains('is-active')) {
+                        opt.click();
+                        console.log('[自动勾选] 保修时长 \u2192 ' + expectedText);
+                        showAutoBadge(['保修时长', '保修剩余', '保修状态', '保修期'], expectedText);
+                    }
+                    return;
+                }
+            }
+            break;
+        }
+    }
+
+    function autoSelectStorage(sourceText) {
+        let capacityValue = extractField(sourceText, '容量') || extractField(sourceText, '存储容量');
+        if (capacityValue && /定制内存|样机内存/i.test(capacityValue)) capacityValue = '';
+
+        if (!capacityValue) {
+            const capRegex = /(\d{1,4})\s*(GB|G|TB|T)\b/gi;
+            let m;
+            const found = [];
+            while ((m = capRegex.exec(sourceText)) !== null) {
+                let val = parseInt(m[1]);
+                let unit = m[2].toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
+                found.push(val + unit);
+            }
+            if (found.length === 0) return;
+            if (found.length === 1) {
+                capacityValue = found[0];
+            } else {
+                let maxGB = 0;
+                for (const f of found) {
+                    const pm = f.match(/^(\d+)(GB|TB)$/);
+                    if (pm) {
+                        const gb = pm[2] === 'TB' ? parseInt(pm[1]) * 1024 : parseInt(pm[1]);
+                        if (gb > maxGB) { maxGB = gb; capacityValue = f; }
+                    }
+                }
+            }
+        }
+
+        if (!capacityValue) return;
+
+        function normStorage(s) {
+            if (s.includes('+')) {
+                return s.split('+').map(p => normStorage(p.trim())).join('+');
+            }
+            const m2 = s.match(/^(\d+)\s*(GB|G|TB|T)$/i);
+            if (m2) {
+                const v = parseInt(m2[1]);
+                const u = m2[2].toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
+                if (u === 'TB') return (v * 1024) + 'GB';
+            }
+            return s.replace(/\s+/g, '').toUpperCase().replace(/^(\d+)G$/i, '$1GB').replace(/^(\d+)T$/i, '$1TB');
+        }
+
+        const expectedNorm = normStorage(capacityValue);
+
+        const capField = extractField(sourceText, '容量') || extractField(sourceText, '存储容量');
+        let combinedExpected = '';
+        if (capField && !/定制内存|样机内存/i.test(capField)) {
+            const parts = capField.match(/(\d+\s*GB)\s*\+\s*(\d+\s*GB)/i);
+            if (parts) {
+                combinedExpected = normStorage(parts[1].trim()) + '+' + normStorage(parts[2].trim());
+            }
+        }
+
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const text = label.textContent.trim();
+            if (!/^存储容量$|^存储$|^内存$|^容量$/.test(text)) continue;
+            if (/固态硬盘|显卡/i.test(label.parentElement.textContent)) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+
+            // 候选匹配值：先尝试完整值，再尝试拆分的各个部分
+            const candidates = [expectedNorm];
+            if (expectedNorm.includes('+')) {
+                expectedNorm.split('+').forEach(p => candidates.push(p.trim()));
+            }
+
+            for (const opt of options) {
+                const optText = getCleanOptionText(opt);
+                const optNorm = normStorage(optText);
+                // 先尝试完整匹配（包含组合值和 combinedExpected）
+                if (optNorm === expectedNorm || (combinedExpected && optNorm === combinedExpected)) {
+                    if (!isOptionAlreadySelected(opt)) {
+                        opt.click();
+                        console.log('[自动勾选] 存储容量 \u2192 ' + optText);
+                    }
+                    showAutoBadge(['存储容量', '存储', '内存', '容量'], optText);
+                    return;
+                }
+            }
+            // 完整值没匹配到，尝试拆分后的各部分
+            if (expectedNorm.includes('+')) {
+                for (const opt of options) {
+                    const optText = getCleanOptionText(opt);
+                    const optNorm = normStorage(optText);
+                    if (candidates.some(c => c && optNorm === c)) {
+                        if (!isOptionAlreadySelected(opt)) {
+                            opt.click();
+                            console.log('[自动勾选] 存储容量(部分) \u2192 ' + optText);
+                        }
+                        showAutoBadge(['存储容量', '存储', '内存', '容量'], optText);
+                        return;
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    function autoSelectColor(sourceText, brand, category) {
+        let officialColor = getOfficialColorFromDOM(sourceText);
+
+        if (category === '智能手表' && /华为|荣耀|Huawei|Honor/i.test(brand) && officialColor && !/^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) {
+            const normalizedOfficial = officialColor.replace(/\s+/g, '');
+            for (const rule of huaweiWatchColorRules) {
+                if (!rule.keywords.every(kw => normalizedOfficial.includes(kw))) continue;
+                const expectedOptions = Array.isArray(rule.expected) ? rule.expected : [rule.expected];
+                const allLabels = document.querySelectorAll('.el-form-item__label');
+                for (const label of allLabels) {
+                    const labelText = label.textContent.trim();
+                    if (!/颜色|机身颜色|配色|表壳外观/.test(labelText)) continue;
+                    const content = label.nextElementSibling;
+                    if (!content) continue;
+                    const options = content.querySelectorAll('.el-radio-button__inner');
+                    for (const opt of options) {
+                        const optText = getCleanOptionText(opt);
+                        if (expectedOptions.includes(optText)) {
+                            if (!isOptionAlreadySelected(opt)) {
+                                opt.click();
+                                console.log('[自动勾选] 颜色 \u2192 ' + optText);
+                            }
+                            showAutoBadge(['颜色', '机身颜色', '配色', '表壳外观'], optText);
+                            return;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Apple: try extracting color from model line if no color field found
+        if (!officialColor && /苹果|Apple/i.test(brand)) {
+            const modelLineRegex = /(?:^[：:]*型号[：:]\s*)(.+)$/im;
+            const modelMatch = sourceText.match(modelLineRegex);
+            if (modelMatch) {
+                const modelContent = modelMatch[1].trim();
+                const colorKeywords = [
+                    '深空灰色', '暗紫色', '星光色', '午夜色', '远峰蓝', '苍岭绿',
+                    '石墨色', '海蓝色', '天峰蓝', '红色', '蓝色', '绿色', '紫色',
+                    '黄色', '白色', '黑色', '粉色', '金色', '银色', '星宇橙色',
+                    '原色钛金属', '沙漠钛金属', '苍井绿色', '深蓝色', '苍岭绿色',
+                    '深紫色', '墨绿色', '珊瑚色', '亮黑色', '中国红'
+                ];
+                for (const ck of colorKeywords) {
+                    if (modelContent.includes(ck)) { officialColor = ck; break; }
+                }
+            }
+        }
+
+        if (!officialColor || /^(提示|关闭|提示关|提示关闭)$/i.test(officialColor)) return;
+
+        const breakKeywords = ['内存', '产品描述', '网络制式', '型号', '品牌', '购买渠道', '存储容量', '容量', '激活状态', '保修'];
+        for (const kw of breakKeywords) {
+            const idx = officialColor.indexOf(kw);
+            if (idx > 0) { officialColor = officialColor.substring(0, idx).trim(); break; }
+        }
+
+        if (!officialColor) return;
+
+        const normOfficial = officialColor.replace(/\s+/g, '').toLowerCase();
+        const labelPatterns = ['颜色', '机身颜色', '配色', '表壳外观'];
+
+        let exactMatch = null;
+        let closeMatches = 0;
+
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const labelText = label.textContent.trim();
+            if (!labelPatterns.some(p => labelText === p || labelText.includes(p))) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+
+            for (const opt of options) {
+                const optText = getCleanOptionText(opt);
+                const normOpt = optText.replace(/\s+/g, '').toLowerCase();
+                if (normOpt === normOfficial) exactMatch = opt;
+                if (normOpt.length >= 2 && (normOfficial.includes(normOpt) || normOpt.includes(normOfficial))) {
+                    closeMatches++;
+                }
+            }
+            break;
+        }
+
+        if (exactMatch && !isOptionAlreadySelected(exactMatch)) {
+            exactMatch.click();
+            console.log('[自动勾选] 颜色 \u2192 ' + getCleanOptionText(exactMatch));
+        }
+        if (exactMatch) {
+            showAutoBadge(['颜色', '机身颜色', '配色', '表壳外观'], getCleanOptionText(exactMatch));
+        }
+    }
+
+    function autoSelectWatchSize(sourceText) {
+        let model = extractField(sourceText, '型号');
+        if (!model) model = extractField(sourceText, '机型');
+        let mmMatch = null;
+        if (model) {
+            const clean = model.replace(/[""]/g, '');
+            mmMatch = clean.match(/(\d{2})\s*mm/i);
+        }
+        if (!mmMatch) {
+            mmMatch = sourceText.match(/(\d{2})\s*mm/i);
+        }
+        if (!mmMatch) return;
+        const expected = mmMatch[1] + '毫米';
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const labelText = label.textContent.trim();
+            if (!/表盘尺寸/.test(labelText)) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+            for (const opt of options) {
+                const optText = getCleanOptionText(opt);
+                if (optText === expected && !isOptionAlreadySelected(opt)) {
+                    opt.click();
+                    console.log('[自动勾选] 表盘尺寸 \u2192 ' + expected);
+                    showAutoBadge(['表盘尺寸'], expected);
+                    return;
+                }
+            }
+            break;
+        }
+    }
+
+    function autoSelectPurchaseChannel(sourceText, brand, category) {
+        const getField = (name) => extractField(sourceText, name);
+
+        const domesticCheck = getField('版本类型') || getField('是否国行');
+        if (domesticCheck === '无') return;
+
+        if (/苹果|Apple/i.test(brand)) {
+            let isDomestic = getField('版本类型');
+            if (!isDomestic) isDomestic = getField('是否国行');
+            if (!isDomestic) return;
+
+            let expected = '';
+            const networkLock = getField('网络锁状态');
+            const availableOptions = getAvailableOptions('购买渠道');
+
+            if (isDomestic === '国行') {
+                const machineType = getField('机器类型');
+                if (machineType.includes('BS资源机')) expected = '资源机-国行';
+                else if (machineType.includes('展示机')) expected = '展示机-国行';
+                else if (machineType.includes('官换机')) expected = '官换机-国行';
+                else if (machineType.includes('官翻机')) expected = '官修机-国行';
+                else if (machineType.includes('权益机')) expected = '权益机';
+                else expected = '大陆国行';
+            } else {
+                const regionMatch = isDomestic.match(/^(.+?)\s*[（(]非国行[）)]/);
+                const regionText = regionMatch ? regionMatch[1].trim() : isDomestic;
+
+                if (regionText === '美国' || regionText === '美版') {
+                    const hasUSOpts = availableOptions.includes('美版-无锁') || availableOptions.includes('美版-有锁');
+                    const hasNonCNOpts = availableOptions.includes('非大陆国行-无锁') || availableOptions.includes('非大陆国行-有锁');
+
+                    if (hasUSOpts) {
+                        if (networkLock && /无锁/.test(networkLock)) expected = '美版-无锁';
+                        else if (networkLock && /有锁/.test(networkLock)) expected = '美版-有锁';
+                    } else if (hasNonCNOpts) {
+                        if (networkLock && /无锁/.test(networkLock)) expected = '非大陆国行-无锁';
+                        else if (networkLock && /有锁/.test(networkLock)) expected = '非大陆国行-有锁';
+                    } else {
+                        expected = '非国行';
+                    }
+                } else if (regionText === '中国香港' || regionText === '中国台湾') {
+                    expected = '港澳台版';
+                } else {
+                    const hasNonCNOpts = availableOptions.includes('非大陆国行-无锁') || availableOptions.includes('非大陆国行-有锁');
+                    if (hasNonCNOpts) {
+                        if (networkLock && /无锁/.test(networkLock)) expected = '非大陆国行-无锁';
+                        else if (networkLock && /有锁/.test(networkLock)) expected = '非大陆国行-有锁';
+                    } else {
+                        expected = category === '智能手表' ? '非大陆国行' : '非国行';
+                    }
+                }
+            }
+
+            if (expected) {
+                if (expected === '非国行' && !availableOptions.includes('非国行') && availableOptions.includes('非大陆国行')) {
+                    expected = '非大陆国行';
+                }
+                if (category === '智能手表' && expected === '非国行') {
+                    expected = '非大陆国行';
+                }
+                findLabelAndClick(['购买渠道', '渠道', '国家版本', '销售地区'], expected, expected);
+            }
+            return;
+        }
+
+        let isDomestic = getField('是否国行');
+        if (isDomestic && (isDomestic === '无' || isDomestic.trim() === '')) return;
+
+        let purchaseLocation = getField('购买地点');
+        if (!isDomestic && purchaseLocation && (purchaseLocation === '无' || purchaseLocation.trim() === '')) return;
+
+        let expected = '';
+
+        if (isDomestic) {
+            if (isDomestic === '国行') {
+                const isDemo = getField('是否样机/演示机');
+                const desc = getField('产品描述') || '';
+                const shouldBeDemo = isDemo === '是' || /零售样机/i.test(desc);
+                if (shouldBeDemo && getAvailableOptions('购买渠道').includes('演示机')) {
+                    expected = '演示机';
+                } else {
+                    expected = '大陆国行';
+                }
+            } else if (isDomestic.includes('非国行') || isDomestic.includes('非大陆')) {
+                expected = '非国行';
+            } else if (!/中国|国行|China/i.test(isDomestic)) {
+                if (/中国台湾|中国香港|台湾|香港/.test(isDomestic) && getAvailableOptions('购买渠道').includes('港澳台版')) {
+                    expected = '港澳台版';
+                } else {
+                    expected = '非国行';
+                }
+            }
+        } else if (purchaseLocation) {
+            if (purchaseLocation === 'China') {
+                const isDemo = getField('是否样机/演示机');
+                const desc = getField('产品描述') || '';
+                const shouldBeDemo = isDemo === '是' || /零售样机/i.test(desc);
+                if (shouldBeDemo && getAvailableOptions('购买渠道').includes('演示机')) {
+                    expected = '演示机';
+                } else {
+                    expected = '大陆国行';
+                }
+            } else {
+                expected = '非国行';
+            }
+        }
+
+        if (expected) {
+            const availOpts = getAvailableOptions('购买渠道');
+            if (expected === '非国行' && !availOpts.includes('非国行') && availOpts.includes('非大陆国行')) {
+                expected = '非大陆国行';
+            }
+            findLabelAndClick(['购买渠道', '渠道', '国家版本', '销售地区'], expected, expected);
+        }
+    }
+
+    function autoSelectAppleModel(sourceText) {
+        let deviceModel = extractField(sourceText, '机型');
+        if (!deviceModel) deviceModel = extractField(sourceText, '入网型号');
+        if (!deviceModel) return;
+
+        const aMatch = deviceModel.match(/A\d{4}/);
+        if (!aMatch) return;
+        const aNumber = aMatch[0];
+
+        const availableOptions = getAvailableOptions('型号');
+        if (availableOptions.length === 0) return;
+
+        const matchedOption = availableOptions.find(opt => opt.includes(aNumber) && opt !== '其他型号');
+        if (matchedOption) {
+            findLabelAndClick(['型号'], matchedOption, matchedOption);
+        } else if (availableOptions.includes('其他型号')) {
+            findLabelAndClick(['型号'], '其他型号', '其他型号');
+        }
+    }
+
+    function autoSelectNetworkType(sourceText, brand, category) {
+        const validCategories = ['手机', '平板', '智能手表'];
+        if (!validCategories.includes(category)) return;
+
+        // Apple iPad: check 是否WiFi+移动网络
+        if (/苹果|Apple/i.test(brand) && category === '平板') {
+            const wifiMobile = extractField(sourceText, '是否WiFi+移动网络');
+            if (wifiMobile && /否/i.test(wifiMobile)) {
+                findLabelAndClick(['网络制式'], 'WIFI版', 'WIFI版');
+            } else if (wifiMobile && /是/i.test(wifiMobile)) {
+                const opts = getAvailableOptions('网络制式');
+                const nonWifi = opts.find(o => !/^WIFI版$|^WiFi版$/i.test(o.trim()));
+                if (nonWifi) findLabelAndClick(['网络制式'], nonWifi, nonWifi);
+            }
+            return;
+        }
+
+        // 小米/红米智能手表
+        if (/小米|Redmi|红米/i.test(brand) && category === '智能手表') {
+            let modelText = extractField(sourceText, '型号');
+            if (!modelText) modelText = extractField(sourceText, '型号配置');
+            if (!modelText) return;
+            const expected = /esim/i.test(modelText) ? 'eSIM版' : '蓝牙版';
+            findLabelAndClick(['网络制式'], expected, expected);
+            return;
+        }
+
+        let modelField = extractField(sourceText, '型号');
+        if (!modelField) modelField = extractField(sourceText, '机型');
+
+        const desc = extractField(sourceText, '产品描述');
+        const modelSource = (modelField || '') + ' ' + (desc || '');
+        if (!modelSource.trim()) return;
+
+        let expected = '';
+
+        if (category === '平板' || category === '手机') {
+            if (/5G版/i.test(modelSource)) {
+                expected = 'WIFI+5G版';
+            } else if (/LTE版|全网通版|全网通|插卡版|4G版/i.test(modelSource)) {
+                expected = 'WIFI+4G版';
+            } else if (/WIFI版|WiFi版/i.test(modelSource)) {
+                expected = 'WIFI版';
+            } else {
+                return;
+            }
+        } else if (category === '智能手表') {
+            if (/eSIM版|eSIM/i.test(modelSource)) {
+                expected = 'eSIM版';
+            } else if (/蓝牙版/i.test(modelSource)) {
+                expected = '蓝牙版';
+            } else if (/LTE版|LTE/i.test(modelSource)) {
+                expected = 'LTE版';
+            }
+        }
+
+        if (expected) findLabelAndClick(['网络制式'], expected, expected);
+    }
+
+    function autoSelectWatchCase(sourceText, brand) {
+        let watchCase = extractField(sourceText, '表壳外观');
+        if (!watchCase || /^(提示|关闭|提示关|提示关闭)$/i.test(watchCase)) return;
+
+        const breakKeywords = ['内存', '产品描述', '网络制式', '型号', '品牌', '购买渠道', '存储容量', '容量', '激活状态', '保修'];
+        for (const kw of breakKeywords) {
+            const idx = watchCase.indexOf(kw);
+            if (idx > 0) { watchCase = watchCase.substring(0, idx).trim(); break; }
+        }
+
+        if (!watchCase) return;
+
+        const normOfficial = watchCase.replace(/\s+/g, '').toLowerCase();
+        let exactMatch = null;
+
+        const allLabels = document.querySelectorAll('.el-form-item__label');
+        for (const label of allLabels) {
+            const labelText = label.textContent.trim();
+            if (!/表壳外观|颜色|机身颜色|配色/.test(labelText)) continue;
+            const content = label.nextElementSibling;
+            if (!content) continue;
+            const options = content.querySelectorAll('.el-radio-button__inner');
+
+            for (const opt of options) {
+                const optText = getCleanOptionText(opt);
+                const normOpt = optText.replace(/\s+/g, '').toLowerCase();
+                if (normOpt === normOfficial) {
+                    exactMatch = opt;
+                    break;
+                }
+            }
+            break;
+        }
+
+        if (exactMatch && !isOptionAlreadySelected(exactMatch)) {
+            exactMatch.click();
+            console.log('[自动勾选] 表壳外观 \u2192 ' + getCleanOptionText(exactMatch));
+        }
+        if (exactMatch) {
+            showAutoBadge(['表壳外观', '颜色', '机身颜色', '配色'], getCleanOptionText(exactMatch));
+        }
+    }
+
+    let lastAutoSelectText = null;
+
+    function autoSelectFields(sourceText, force = false) {
+        if (!sourceText || sourceText.length < CONFIG.minOfficialLength) return;
+        if (!force && lastAutoSelectText === sourceText) return;
+        lastAutoSelectText = sourceText;
+
+        const brand = getInputValueByLabel('品牌');
+        const category = getInputValueByLabel('品类');
+        if (!brand || !category) return;
+
+        const validCategories = ['手机', '平板', '智能手表'];
+        if (!validCategories.includes(category)) return;
+
+        const detLine = getInputValueByLabel('检测线');
+        const isYLine = detLine && detLine.trim() === 'Y线';
+
+        // Y线：只勾选保修（由 autoCheckWarrantyForYLine 处理），不自动勾选其他字段
+        if (isYLine) return;
+
+        autoSelectWarranty(sourceText);
+        autoSelectStorage(sourceText);
+
+        if (category === '手机' || category === '平板') {
+            autoSelectColor(sourceText, brand, category);
+        }
+
+        autoSelectPurchaseChannel(sourceText, brand, category);
+
+        if (/苹果|Apple/i.test(brand)) {
+            autoSelectAppleModel(sourceText);
+        }
+
+        autoSelectNetworkType(sourceText, brand, category);
+
+        if (category === '智能手表') {
+            autoSelectColor(sourceText, brand, category);
+            autoSelectWatchCase(sourceText, brand);
+            autoSelectWatchSize(sourceText);
         }
     }
 
@@ -2031,6 +2660,8 @@
             hideBanner();
             hideNoAnomalyMessage();
             acknowledgedErrors = [];
+            lastAutoSelectText = null;
+            document.querySelectorAll('.suk-auto-badge').forEach(el => el.remove());
             retryCount = 0;
             console.log('[质检高亮] 已清空对比数据，等待新查询结果');
         }
