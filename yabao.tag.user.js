@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.74
+// @version      0.76
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -191,6 +191,18 @@
         if (!saveBox) return false;
         const text = saveBox.innerText.trim();
         return text.length > 100 && text.includes('查询时间');
+    }
+
+    /**
+     * 归一化容量格式：给缺少单位的数字补"GB"
+     * (8+128GB) → 8GB+128GB, (8+128) → 8GB+128GB
+     */
+    function normalizeCapacity(cap) {
+        return cap.split('+').map(function(p) {
+            p = p.trim();
+            if (/\d$/.test(p)) return p + 'GB';
+            return p;
+        }).join('+');
     }
 
     const host = location.hostname;
@@ -431,7 +443,7 @@
                     const clean = line.replace(/[：:]\s*$/, '');
                     if (!line.includes(':') && i + 1 < merged.length && merged[i + 1].startsWith('(')) {
                         finalLines.push('型号:' + clean);
-                        finalLines.push('容量:' + merged[i + 1].replace(/^\(|\)$/g, ''));
+                        finalLines.push('容量:' + normalizeCapacity(merged[i + 1].replace(/^\(|\)$/g, '')));
                         i++;
                         continue;
                     }
@@ -508,10 +520,6 @@
                 return null;
             }
 
-            /**
-             * 从「您的机型：Y300 12G+512G」中分离机型与容量
-             * 容量格式为 xxG+xxxG（如 12G+512G）或 xxG+xxxGB
-             */
             function parseModelCapacity(text) {
                 // 匹配末尾容量格式：8GB+256GB, 8G+256G, 16G+1T, 12GB+256GB 等
                 const capMatch = text.match(/\s+(\d+[GT]B?)\+(\d+[GT]B?)\s*$/);
