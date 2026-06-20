@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.87
+// @version      1.7.89
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1687,7 +1687,11 @@
 
             const brand = getInputValueByLabel('品牌');
             const category = getInputValueByLabel('品类');
-                    if (!category) return null;
+            const modelVal = getInputValueByLabel('机型') || getSelectedValue(['机型', '型号']);
+            // 仅值变化时打印一次
+            if (brand && brand !== window._lastBrand) { console.log('品牌→' + brand); window._lastBrand = brand; }
+            if (category && category !== window._lastCategory) { console.log('品类→' + category); window._lastCategory = category; }
+            if (modelVal && modelVal !== window._lastModel) { console.log('机型→' + modelVal); window._lastModel = modelVal; }
             // 品牌或品类为空时等待异步渲染完成
             if (force && (!brand || !category) && retryCount < CONFIG.maxRetries) {
                 retryCount++;
@@ -2748,7 +2752,6 @@
         GM_xmlhttpRequest({
             method: 'GET', url: SUK_URL,
             onload: (resp) => {
-                markDone(SUK_CK_KEY);
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
@@ -2756,6 +2759,8 @@
                     if (confirm(`功能脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
                         window.location.href = SUK_URL;
                     }
+                } else {
+                    markDone(SUK_CK_KEY);
                 }
             }
         });
