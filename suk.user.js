@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.86
+// @version      1.7.87
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -74,7 +74,7 @@
 
     function scheduleSync() {
         if (syncTimer) clearTimeout(syncTimer);
-        syncTimer = setTimeout(syncAllSelects, 300);
+        syncTimer = setTimeout(syncAllSelects, 800);
     }
 
     document.addEventListener('click', function(e) {
@@ -89,10 +89,10 @@
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(syncAllSelects, 1500);
+            setTimeout(syncAllSelects, 2000);
         });
     } else {
-        setTimeout(syncAllSelects, 1500);
+        setTimeout(syncAllSelects, 2000);
     }
 
     window.dropdownSelections = selections;
@@ -796,6 +796,7 @@
                     const brand = getInputValueByLabel('品牌');
                     if (!brand) return null;
                     const category = getInputValueByLabel('品类');
+                    if (!category) return null;
                     const getField = (name) => extractField(officialText, name);
 
                     if (/小米|Redmi|红米/i.test(brand)) {
@@ -1686,6 +1687,7 @@
 
             const brand = getInputValueByLabel('品牌');
             const category = getInputValueByLabel('品类');
+                    if (!category) return null;
             // 品牌或品类为空时等待异步渲染完成
             if (force && (!brand || !category) && retryCount < CONFIG.maxRetries) {
                 retryCount++;
