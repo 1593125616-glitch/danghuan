@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.56
+// @version      1.2.57
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1543,13 +1543,14 @@
         GM_xmlhttpRequest({
             method: 'GET', url: JX_URL,
             onload: (resp) => {
-                jxMarkDone();
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
                     if (confirm(`机型脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
                         window.location.href = JX_URL;
                     }
+                } else {
+                    jxMarkDone();
                 }
             }
         });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.76
+// @version      0.77
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -715,7 +715,6 @@
         GM_xmlhttpRequest({
             method: 'GET', url: YB_SCRIPT_URL,
             onload: (resp) => {
-                markCheckDone();
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
@@ -723,6 +722,8 @@
                     if (confirm(`鸭宝脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
                         window.location.href = YB_SCRIPT_URL;
                     }
+                } else {
+                    markCheckDone();
                 }
             }
         });

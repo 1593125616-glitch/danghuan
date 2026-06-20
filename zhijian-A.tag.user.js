@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      zhijian-d7gqnvecce55e0e0e-1445087380.ap-shanghai.app.tcloudbase.com
+// @connect      cdn.jsdelivr.net
 // @run-at       document-idle
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/zhijian-A.tag.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/zhijian-A.tag.user.js
@@ -125,4 +128,47 @@
             }
         }
     });
+
+    // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
+    const A_CK_KEY = 'zhijian_a_last_update_check';
+    const A_CK_INTERVAL = 6 * 60 * 60 * 1000;
+    const A_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/zhijian-A.tag.user.js';
+
+    function isNewerVer(remote, current) {
+        const r = remote.split('.').map(Number);
+        const c = current.split('.').map(Number);
+        for (let i = 0; i < Math.max(r.length, c.length); i++) {
+            const rv = r[i] || 0, cv = c[i] || 0;
+            if (rv > cv) return true;
+            if (rv < cv) return false;
+        }
+        return false;
+    }
+
+    function shouldCheck(key) {
+        if (typeof GM_getValue === 'undefined') return true;
+        return Date.now() - GM_getValue(key, 0) >= A_CK_INTERVAL;
+    }
+    function markDone(key) { if (typeof GM_setValue !== 'undefined') GM_setValue(key, Date.now()); }
+
+    function checkUpdate() {
+        if (!shouldCheck(A_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
+        GM_xmlhttpRequest({
+            method: 'GET', url: A_URL,
+            onload: (resp) => {
+                const m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) return;
+                if (isNewerVer(m[1], GM_info.script.version)) {
+                    console.warn(`[质检A] 发现新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
+                    if (confirm(`质检A脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
+                        window.location.href = A_URL;
+                    }
+                } else {
+                    markDone(A_CK_KEY);
+                }
+            }
+        });
+    }
+    checkUpdate();
+    setInterval(checkUpdate, A_CK_INTERVAL);
 })();
