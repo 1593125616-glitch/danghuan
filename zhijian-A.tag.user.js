@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -109,23 +109,53 @@
         });
     }
 
-    // ===== 本地去重：同质检人同条码只上传一次 =====
+    // ===== 本地去重：同质检人同条码只上传一次（自动清理过期） =====
     const DEDUP_KEY = 'zhijian_a_uploaded';
+    const DEDUP_CLEAN_KEY = 'zhijian_a_dedup_clean';
+
+    function getTodayStr() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
 
     function isDuplicate(barcode, inspector) {
         if (!barcode || !inspector) return false;
         const stored = GM_getValue(DEDUP_KEY, '');
-        const set = stored ? new Set(stored.split(',')) : new Set();
-        return set.has(barcode + '|' + inspector);
+        if (!stored) return false;
+        const prefix = getTodayStr() + ':';
+        return stored.indexOf(prefix + barcode + '|' + inspector) >= 0;
     }
 
     function markUploaded(barcode, inspector) {
         if (!barcode || !inspector) return;
-        const stored = GM_getValue(DEDUP_KEY, '');
-        const set = stored ? new Set(stored.split(',')) : new Set();
-        set.add(barcode + '|' + inspector);
-        GM_setValue(DEDUP_KEY, [...set].join(','));
+        let stored = GM_getValue(DEDUP_KEY, '');
+        const prefix = getTodayStr() + ':';
+        const entry = prefix + barcode + '|' + inspector;
+        if (stored) {
+            if (stored.indexOf(entry) >= 0) return;
+            stored += ',' + entry;
+        } else {
+            stored = entry;
+        }
+        GM_setValue(DEDUP_KEY, stored);
     }
+
+    // 每天首次运行时清理过期数据（只保留今天和昨天的）
+    function cleanOldDedup() {
+        const lastClean = GM_getValue(DEDUP_CLEAN_KEY, '');
+        const today = getTodayStr();
+        if (lastClean === today) return;
+        const stored = GM_getValue(DEDUP_KEY, '');
+        if (!stored) { GM_setValue(DEDUP_CLEAN_KEY, today); return; }
+        const entries = stored.split(',');
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
+        const keep = entries.filter(e => e.startsWith(today + ':') || e.startsWith(yStr + ':'));
+        GM_setValue(DEDUP_KEY, keep.join(','));
+        GM_setValue(DEDUP_CLEAN_KEY, today);
+    }
+    cleanOldDedup();
 
     function getInspector(userName) {
         if (!userName) return '';
