@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -109,6 +109,30 @@
         });
     }
 
+    // ===== 本地去重：同质检人同条码只上传一次 =====
+    const DEDUP_KEY = 'zhijian_a_uploaded';
+
+    function isDuplicate(barcode, inspector) {
+        if (!barcode || !inspector) return false;
+        const stored = GM_getValue(DEDUP_KEY, '');
+        const set = stored ? new Set(stored.split(',')) : new Set();
+        return set.has(barcode + '|' + inspector);
+    }
+
+    function markUploaded(barcode, inspector) {
+        if (!barcode || !inspector) return;
+        const stored = GM_getValue(DEDUP_KEY, '');
+        const set = stored ? new Set(stored.split(',')) : new Set();
+        set.add(barcode + '|' + inspector);
+        GM_setValue(DEDUP_KEY, [...set].join(','));
+    }
+
+    function getInspector(userName) {
+        if (!userName) return '';
+        const parts = userName.split('-');
+        return parts.length >= 2 ? parts[1] : parts[0];
+    }
+
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
         if (!btn) return;
@@ -121,7 +145,13 @@
                 submitTime: getTimestamp()
             };
             if (data.barcode && data.userName) {
+                const inspector = getInspector(data.userName);
+                if (isDuplicate(data.barcode, inspector)) {
+                    console.log('[质检] 跳过重复:', data.barcode, inspector);
+                    return;
+                }
                 uploadToCloud(data);
+                markUploaded(data.barcode, inspector);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
