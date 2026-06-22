@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -65,16 +65,27 @@
     }
 
     function getCategory() {
+        if (window.dropdownSelections && window.dropdownSelections['品类']) {
+            return window.dropdownSelections['品类'];
+        }
+        const labelNames = ['品类'];
         const items = document.querySelectorAll('.el-form-item');
         for (const item of items) {
             const label = item.querySelector('.el-form-item__label');
-            if (label && label.textContent.trim() === '品类') {
+            if (label && labelNames.some(n => label.textContent.trim() === n)) {
+                // 方式1: input 值
                 const inp = item.querySelector('.el-input__inner');
                 if (inp) {
                     let val = inp.value.trim();
                     if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') {
                         val = inp.placeholder.trim();
                     }
+                    if (val && val !== '请选择') return val;
+                }
+                // 方式2: 选中标签文本（Vue 异步渲染时 DOM 还没更新但文本已显示）
+                const tag = item.querySelector('.el-select__tags-text, .el-select__selection span, .el-select .el-tag');
+                if (tag) {
+                    let val = tag.textContent.trim();
                     if (val && val !== '请选择') return val;
                 }
             }
