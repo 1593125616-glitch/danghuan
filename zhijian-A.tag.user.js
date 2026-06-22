@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -56,12 +56,6 @@
             }
         } catch(e) {}
         return '';
-    }
-
-    function getTimestamp() {
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     }
 
     function getCategory() {
@@ -183,7 +177,6 @@
                 barcode: getBarcode(),
                 userName: getUserInfo(),
                 category: getCategory(),
-                submitTime: getTimestamp()
             };
             if (data.barcode && data.userName) {
                 const inspector = getInspector(data.userName);
