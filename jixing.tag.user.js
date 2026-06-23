@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.57
+// @version      1.2.58
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -455,6 +455,10 @@
         }
         if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
             cleaned = cleanAppleAirPodsModel(cleaned);
+        }
+        // 一加手机：清理型号中的"手机"字样
+        if (/一加|oneplus/i.test(brand)) {
+            cleaned = cleaned.replace(/\s*手机\s*/gi, ' ');
         }
         return cleaned.replace(/\s+/g, ' ').trim();
     }
