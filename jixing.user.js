@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.58
+// @version      1.2.59
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -967,6 +967,16 @@
                                 return `机型 应为【${expected}】，你选了【${originalSelectedVal}】`;
                             }
                             return null;
+                        }
+                    }
+
+                    // vivo 平板：Pad5 Pro + 轻羽白（官方颜色）→ 超轻版
+                    if (/vivo|VIVO/i.test(brand) && (category === '平板' || category === '平板电脑' || category === 'Pad')) {
+                        const offColor = extractInfoLine(officialText, '颜色') || extractInfoLine(officialText, '表壳外观');
+                        if (/轻羽白/.test(offColor) && /pad\s*5\s*pro/i.test(officialModelClean)) {
+                            const expected = 'vivo Pad5 Pro 超轻版';
+                            if (normalizeModelForCompare(expected).toLowerCase() === normalizeModelForCompare(selectedVal).toLowerCase()) return null;
+                            return `机型 应为【${expected}】（颜色为轻羽白），你选了【${selectedVal}】`;
                         }
                     }
 
