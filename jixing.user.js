@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.59
+// @version      1.2.60
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1241,13 +1241,14 @@
         const tables = document.querySelectorAll('table');
         for (const table of tables) {
             const cells = table.querySelectorAll('td');
-            let hasModel = false, hasColor = false;
+            let hasModel = false, hasColor = false, hasCase = false;
             cells.forEach(cell => {
                 const text = cell.textContent.trim();
                 if (text === '机型') hasModel = true;
                 if (text === '颜色') hasColor = true;
+                if (text === '表壳外观') hasCase = true;
             });
-            if (hasModel && hasColor) {
+            if (hasModel && (hasColor || hasCase)) {
                 const formattedText = parseTableToText(table);
                 if (formattedText.length >= CONFIG.minOfficialLength) {
                     const container = document.createElement('div');

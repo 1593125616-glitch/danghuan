@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.89
+// @version      1.7.94
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1235,9 +1235,8 @@
                     if (category !== '智能手表') return null;
                     let model = extractField(officialText, '型号');
                     if (!model) model = extractField(officialText, '机型');
-                    if (!model) return null;
-                    const isEsim = /eSIM版/i.test(model);
-                    const isBt = /蓝牙版/i.test(model);
+                    const isEsim = /eSIM版/i.test(model) || /eSIM/i.test(extractField(officialText, '网络制式')||'');
+                    const isBt = /蓝牙版/i.test(model) || /蓝牙/i.test(extractField(officialText, '网络制式')||'');
                     if (!isEsim && !isBt) return null;
                     const expected = isEsim ? 'eSIM版' : '蓝牙版';
                     const selected = getSelectedValue(['网络制式']);
@@ -1463,13 +1462,14 @@
         const tables = document.querySelectorAll('table');
         for (const table of tables) {
             const cells = table.querySelectorAll('td');
-            let hasModel = false, hasColor = false;
+            let hasModel = false, hasColor = false, hasCase = false;
             cells.forEach(cell => {
                 const text = cell.textContent.trim();
                 if (text === '机型') hasModel = true;
                 if (text === '颜色') hasColor = true;
+                if (text === '表壳外观') hasCase = true;
             });
-            if (hasModel && hasColor) {
+            if (hasModel && (hasColor || hasCase)) {
                 const formattedText = parseTableToText(table);
                 if (formattedText.length >= CONFIG.minOfficialLength) {
                     const container = document.createElement('div');
@@ -2536,12 +2536,27 @@
                 return;
             }
         } else if (category === '智能手表') {
-            if (/eSIM版|eSIM/i.test(modelSource)) {
-                expected = 'eSIM版';
-            } else if (/蓝牙版/i.test(modelSource)) {
-                expected = '蓝牙版';
-            } else if (/LTE版|LTE/i.test(modelSource)) {
-                expected = 'LTE版';
+            // IMEI方式：从条形码表格的网络制式字段推断
+            var isIMEI = /物品30天内在库质检报告.*保修机/.test(sourceText);
+            if (isIMEI) {
+                var netField = extractField(sourceText, '网络制式');
+                if (netField && /eSIM/i.test(netField)) {
+                    expected = 'eSIM版';
+                } else if (netField && /蓝牙/i.test(netField)) {
+                    expected = '蓝牙版';
+                } else if (netField && /LTE/i.test(netField)) {
+                    expected = 'LTE版';
+                }
+            }
+            // 型号/产品描述兜底（IMEI和粘贴板都走）
+            if (!expected) {
+                if (/eSIM版|eSIM/i.test(modelSource)) {
+                    expected = 'eSIM版';
+                } else if (/蓝牙版/i.test(modelSource)) {
+                    expected = '蓝牙版';
+                } else if (/LTE版|LTE/i.test(modelSource)) {
+                    expected = 'LTE版';
+                }
             }
         }
 
