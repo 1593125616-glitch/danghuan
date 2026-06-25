@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -164,17 +164,15 @@
     let barcodeTime = '';
 
     function captureBarcodeTime() {
-        // 监听"开始检测"按钮点击,作为扫码时间
         document.addEventListener('click', function(e) {
             var btn = e.target.closest('button');
             if (!btn) return;
-            var span = btn.querySelector('span');
-            if (!span) return;
-            var t = span.textContent.trim();
-            if (t === '开始检测') {
+            var t = (btn.querySelector('span')||btn).textContent.trim();
+            if (t==='开始检测'||t==='开始检测\n'||t.indexOf('开始检测')===0){
                 var now = new Date();
                 var pad = function(n){return String(n).padStart(2,'0');};
                 barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+                console.log('[质检] 开始检测时间:', barcodeTime);
             }
         });
     }
@@ -193,6 +191,8 @@
                 step: getStepInfo(),
                 submitTime: barcodeTime || getTimestamp()
             };
+            console.log('[质检] 提交数据:', JSON.stringify(data));
+            console.log('[质检] barcodeTime:', barcodeTime, 'fallback:', !barcodeTime);
             if (data.barcode && data.userName) {
                 // K线 + 物品30天内在库质检报告 + 保修机 → 跳过上传
                 if (data.detectionLine === 'K线') {
