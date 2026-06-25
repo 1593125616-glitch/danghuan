@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -303,8 +303,17 @@
             }
         });
     }
-    setTimeout(fetchRank, 4000);
-    setInterval(fetchRank, 300000);
+    // 整点更新(8-23点)
+    function scheduleNextFetch(){
+        var now=new Date();
+        var h=now.getHours();
+        if(h<8||h>=23)return;
+        var next=new Date(now);
+        next.setHours(h+1,0,0,0);
+        var delay=next-now;
+        setTimeout(function(){fetchRank(); scheduleNextFetch();},delay);
+    }
+    setTimeout(function(){fetchRank(); scheduleNextFetch();}, 4000);
 
     function checkUpdate() {
         if (!shouldCheck(A_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
