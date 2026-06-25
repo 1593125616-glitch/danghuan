@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -173,11 +173,6 @@
                 barcodeTime = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
             }
         });
-        // 提交或清空后重置
-        document.addEventListener('click', function(e) {
-            var btn = e.target.closest('button');
-            if (btn) { var t = btn.textContent.trim(); if (t==='提交'||t==='提 交') { barcodeTime = ''; } }
-        });
     }
     captureBarcodeTime();
 
@@ -206,6 +201,7 @@
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
+                barcodeTime = ''; // 上传后重置,下一个条码重新记录
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }
