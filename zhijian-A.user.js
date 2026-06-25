@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -166,12 +166,17 @@
     function captureBarcodeTime() {
         const input = document.querySelector('input[placeholder="请输入物品条码"]');
         if (!input) return;
-        input.addEventListener('change', function() {
-            if (input.value.trim()) {
+        input.addEventListener('input', function() {
+            if (input.value.trim() && !barcodeTime) {
                 const now = new Date();
                 const pad = n => String(n).padStart(2, '0');
                 barcodeTime = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
             }
+        });
+        // 提交或清空后重置
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('button');
+            if (btn) { var t = btn.textContent.trim(); if (t==='提交'||t==='提 交') { barcodeTime = ''; } }
         });
     }
     captureBarcodeTime();
