@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.7
+// @version      2.8
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -162,36 +162,29 @@
     }
 
     let barcodeTime = '';
+    let lastBarcode = '';
 
-    function captureBarcodeTime() {
-        var input = document.querySelector('input[placeholder="请输入物品条码"]');
-        if (!input) { setTimeout(captureBarcodeTime, 500); return; }
-        var lastVal = '';
-        // MutationObserver监听value变化 + input事件兜底
-        var obs = new MutationObserver(function(){
-            var v = input.value.trim();
-            if (v && v !== lastVal && !barcodeTime) {
-                lastVal = v;
-                recordNow();
-            }
-        });
-        obs.observe(input, {attributes:true, attributeFilter:['value']});
-        input.addEventListener('input', function(){
-            var v = input.value.trim();
-            if (v && !barcodeTime) recordNow();
-        });
-        input.addEventListener('change', function(){
-            var v = input.value.trim();
-            if (v && !barcodeTime) recordNow();
-        });
-        function recordNow(){
-            var now = new Date();
-            var pad = function(n){return String(n).padStart(2,'0');};
-            barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-            console.log('[质检] 扫码时间:', barcodeTime);
-        }
+    function recordBarcodeTime(){
+        var now = new Date();
+        var pad = function(n){return String(n).padStart(2,'0');};
+        barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+        console.log('[质检] 扫码时间:', barcodeTime);
     }
-    captureBarcodeTime();
+
+    // 直接监听input+change+属性变化,每次值变化都记录
+    function watchBarcodeInput(){
+        var inp = document.querySelector('input[placeholder="请输入物品条码"]');
+        if(!inp){setTimeout(watchBarcodeInput,300);return;}
+        inp.addEventListener('input', function(){
+            var v = inp.value.trim();
+            if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
+        });
+        new MutationObserver(function(){
+            var v = inp.value.trim();
+            if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
+        }).observe(inp, {attributes:true, attributeFilter:['value']});
+    }
+    watchBarcodeInput();
     captureBarcodeTime();
 
     document.addEventListener('click', function(e) {
@@ -221,7 +214,7 @@
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
-                barcodeTime = ''; // 上传后重置,下一个条码重新记录
+                // 记录本条码时间后不重置,下次扫码自动覆盖
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }
