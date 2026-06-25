@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -164,18 +164,34 @@
     let barcodeTime = '';
 
     function captureBarcodeTime() {
-        document.addEventListener('click', function(e) {
-            var btn = e.target.closest('button');
-            if (!btn) return;
-            var t = (btn.querySelector('span')||btn).textContent.trim();
-            if (t==='开始检测'||t==='开始检测\n'||t.indexOf('开始检测')===0){
-                var now = new Date();
-                var pad = function(n){return String(n).padStart(2,'0');};
-                barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-                console.log('[质检] 开始检测时间:', barcodeTime);
+        var input = document.querySelector('input[placeholder="请输入物品条码"]');
+        if (!input) { setTimeout(captureBarcodeTime, 500); return; }
+        var lastVal = '';
+        // MutationObserver监听value变化 + input事件兜底
+        var obs = new MutationObserver(function(){
+            var v = input.value.trim();
+            if (v && v !== lastVal && !barcodeTime) {
+                lastVal = v;
+                recordNow();
             }
         });
+        obs.observe(input, {attributes:true, attributeFilter:['value']});
+        input.addEventListener('input', function(){
+            var v = input.value.trim();
+            if (v && !barcodeTime) recordNow();
+        });
+        input.addEventListener('change', function(){
+            var v = input.value.trim();
+            if (v && !barcodeTime) recordNow();
+        });
+        function recordNow(){
+            var now = new Date();
+            var pad = function(n){return String(n).padStart(2,'0');};
+            barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+            console.log('[质检] 扫码时间:', barcodeTime);
+        }
     }
+    captureBarcodeTime();
     captureBarcodeTime();
 
     document.addEventListener('click', function(e) {
