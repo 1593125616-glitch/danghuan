@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -94,14 +94,19 @@
     }
 
     function getStepInfo() {
-        // 回传"当前步骤"后面的完整内容
-        var el=document.querySelector('[data-v-1dbd1090]');
-        if(!el)el=document.body;
-        var body=el.textContent||'';
-        var m=body.match(/当前步骤[：:]\s*(.+?)(?:\n|$)/);
-        if(m)return m[1].trim();
-        m=body.match(/步骤[：:]\s*(.+?)(?:\n|$)/);
-        if(m)return m[1].trim();
+        var spans=document.querySelectorAll('span');
+        for(var i=0;i<spans.length;i++){
+            if(spans[i].textContent.trim().indexOf('当前步骤')===0){
+                var next=spans[i+1];
+                if(next){
+                    var t=next.textContent.trim();
+                    // 只取形如 "sku问题项1/1" 或 "1/4" 的部分
+                    var m=t.match(/^(.+?\d+\/\d+)/);
+                    if(m)return m[1].trim();
+                    return t;
+                }
+            }
+        }
         return '';
     }
 
