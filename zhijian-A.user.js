@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.8
+// @version      2.11
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -171,21 +171,16 @@
         console.log('[质检] 扫码时间:', barcodeTime);
     }
 
-    // 直接监听input+change+属性变化,每次值变化都记录
+    // 轮询检测条码变化(VUE v-model不触发DOM事件)
     function watchBarcodeInput(){
         var inp = document.querySelector('input[placeholder="请输入物品条码"]');
-        if(!inp){setTimeout(watchBarcodeInput,300);return;}
-        inp.addEventListener('input', function(){
+        if(!inp){setTimeout(watchBarcodeInput,500);return;}
+        setInterval(function(){
             var v = inp.value.trim();
             if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
-        });
-        new MutationObserver(function(){
-            var v = inp.value.trim();
-            if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
-        }).observe(inp, {attributes:true, attributeFilter:['value']});
+        }, 500);
     }
     watchBarcodeInput();
-    captureBarcodeTime();
 
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
@@ -214,7 +209,7 @@
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
-                // 记录本条码时间后不重置,下次扫码自动覆盖
+                lastBarcode = ''; barcodeTime = '';
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }

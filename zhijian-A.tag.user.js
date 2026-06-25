@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      1.8
+// @version      2.11
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -58,12 +58,6 @@
         return '';
     }
 
-    function getTimestamp() {
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    }
-
     function getCategory() {
         if (window.dropdownSelections && window.dropdownSelections['品类']) {
             return window.dropdownSelections['品类'];
@@ -86,6 +80,47 @@
                 const tag = item.querySelector('.el-select__tags-text, .el-select__selection span, .el-select .el-tag');
                 if (tag) {
                     let val = tag.textContent.trim();
+                    if (val && val !== '请选择') return val;
+                }
+            }
+        }
+        return '';
+    }
+
+    function getTimestamp() {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        return now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    }
+
+    function getStepInfo() {
+        var spans=document.querySelectorAll('span');
+        for(var i=0;i<spans.length;i++){
+            if(spans[i].textContent.trim().indexOf('当前步骤')===0){
+                var next=spans[i+1];
+                if(next){
+                    var t=next.textContent.trim();
+                    // 只取形如 "sku问题项1/1" 或 "1/4" 的部分
+                    var m=t.match(/^(.+?\d+\/\d+)/);
+                    if(m)return m[1].trim();
+                    return t;
+                }
+            }
+        }
+        return '';
+    }
+
+    function getDetectionLine() {
+        const items = document.querySelectorAll('.el-form-item');
+        for (const item of items) {
+            const label = item.querySelector('.el-form-item__label');
+            if (label && label.textContent.trim() === '检测线') {
+                const inp = item.querySelector('.el-input__inner');
+                if (inp) {
+                    let val = inp.value.trim();
+                    if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') {
+                        val = inp.placeholder.trim();
+                    }
                     if (val && val !== '请选择') return val;
                 }
             }
@@ -120,54 +155,6 @@
         });
     }
 
-    // ===== 本地去重：同质检人同条码只上传一次（自动清理过期） =====
-    const DEDUP_KEY = 'zhijian_a_uploaded';
-    const DEDUP_CLEAN_KEY = 'zhijian_a_dedup_clean';
-
-    function getTodayStr() {
-        const d = new Date();
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    }
-
-    function isDuplicate(barcode, inspector) {
-        if (!barcode || !inspector) return false;
-        const stored = GM_getValue(DEDUP_KEY, '');
-        if (!stored) return false;
-        const prefix = getTodayStr() + ':';
-        return stored.indexOf(prefix + barcode + '|' + inspector) >= 0;
-    }
-
-    function markUploaded(barcode, inspector) {
-        if (!barcode || !inspector) return;
-        let stored = GM_getValue(DEDUP_KEY, '');
-        const prefix = getTodayStr() + ':';
-        const entry = prefix + barcode + '|' + inspector;
-        if (stored) {
-            if (stored.indexOf(entry) >= 0) return;
-            stored += ',' + entry;
-        } else {
-            stored = entry;
-        }
-        GM_setValue(DEDUP_KEY, stored);
-    }
-
-    // 每天首次运行时清理过期数据（只保留今天和昨天的）
-    function cleanOldDedup() {
-        const lastClean = GM_getValue(DEDUP_CLEAN_KEY, '');
-        const today = getTodayStr();
-        if (lastClean === today) return;
-        const stored = GM_getValue(DEDUP_KEY, '');
-        if (!stored) { GM_setValue(DEDUP_CLEAN_KEY, today); return; }
-        const entries = stored.split(',');
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
-        const keep = entries.filter(e => e.startsWith(today + ':') || e.startsWith(yStr + ':'));
-        GM_setValue(DEDUP_KEY, keep.join(','));
-        GM_setValue(DEDUP_CLEAN_KEY, today);
-    }
-    cleanOldDedup();
-
     function getInspector(userName) {
         if (!userName) return '';
         const parts = userName.split('-');
@@ -175,19 +162,25 @@
     }
 
     let barcodeTime = '';
+    let lastBarcode = '';
 
-    function captureBarcodeTime() {
-        const input = document.querySelector('input[placeholder="请输入物品条码"]');
-        if (!input) return;
-        input.addEventListener('change', function() {
-            if (input.value.trim()) {
-                const now = new Date();
-                const pad = n => String(n).padStart(2, '0');
-                barcodeTime = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-            }
-        });
+    function recordBarcodeTime(){
+        var now = new Date();
+        var pad = function(n){return String(n).padStart(2,'0');};
+        barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+        console.log('[质检] 扫码时间:', barcodeTime);
     }
-    captureBarcodeTime();
+
+    // 轮询检测条码变化(VUE v-model不触发DOM事件)
+    function watchBarcodeInput(){
+        var inp = document.querySelector('input[placeholder="请输入物品条码"]');
+        if(!inp){setTimeout(watchBarcodeInput,500);return;}
+        setInterval(function(){
+            var v = inp.value.trim();
+            if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
+        }, 500);
+    }
+    watchBarcodeInput();
 
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
@@ -198,17 +191,25 @@
                 barcode: getBarcode(),
                 userName: getUserInfo(),
                 category: getCategory(),
+                detectionLine: getDetectionLine(),
+                step: getStepInfo(),
                 submitTime: barcodeTime || getTimestamp()
             };
+            console.log('[质检] 提交数据:', JSON.stringify(data));
+            console.log('[质检] barcodeTime:', barcodeTime, 'fallback:', !barcodeTime);
             if (data.barcode && data.userName) {
-                const inspector = getInspector(data.userName);
-                if (isDuplicate(data.barcode, inspector)) {
-                    console.log('[质检] 跳过重复:', data.barcode, inspector);
-                    return;
+                // K线 + 物品30天内在库质检报告 + 保修机 → 跳过上传
+                if (data.detectionLine === 'K线') {
+                    const bodyText = document.body.textContent || '';
+                    if (/物品30天内在库质检报告/.test(bodyText) && /保修机/.test(bodyText)) {
+                        console.log('[质检] K线+保修机，跳过上传:', data.barcode);
+                        return;
+                    }
                 }
+                const inspector = getInspector(data.userName);
                 uploadToCloud(data);
-                markUploaded(data.barcode, inspector);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
+                lastBarcode = ''; barcodeTime = '';
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }
@@ -217,7 +218,7 @@
 
     // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
     const A_CK_KEY = 'zhijian_a_last_update_check';
-    const A_CK_INTERVAL = 6 * 60 * 60 * 1000;
+    const A_CK_INTERVAL = 60 * 60 * 1000;
     const A_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/zhijian-A.tag.user.js';
 
     function isNewerVer(remote, current) {
@@ -236,6 +237,97 @@
         return Date.now() - GM_getValue(key, 0) >= A_CK_INTERVAL;
     }
     function markDone(key) { if (typeof GM_setValue !== 'undefined') GM_setValue(key, Date.now()); }
+
+    // ========== 质检排名面板（可拖动、可折叠） ==========
+    function fmtSec(sec) { if (sec < 60) return sec + '秒'; var m = Math.floor(sec/60); var s = sec%60; return m + '分' + (s ? s + '秒' : ''); }
+    function showRankPanel(data, myName, mySite) {
+        var PANEL_ID = 'qc_rank_panel';
+        if (!document.getElementById('qc_rank_style')) {
+            var s = document.createElement('style'); s.id = 'qc_rank_style';
+            s.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:200px;}'+
+            '#'+PANEL_ID+' .rh{padding:6px 10px;background:#007aff;color:#fff;border-radius:8px 8px 0 0;font-weight:bold;cursor:move;display:flex;justify-content:space-between;}'+
+            '#'+PANEL_ID+' .rcb{font-size:11px;cursor:pointer;}'+
+            '#'+PANEL_ID+' .rb{padding:4px 0;}'+
+            '#'+PANEL_ID+' .rs{padding:2px 10px;font-weight:bold;color:#999;font-size:11px;border-bottom:1px solid #eee;}'+
+            '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:3px 10px;border-bottom:1px solid #f5f5f5;}'+
+            '#'+PANEL_ID+' .rk{min-width:30px;font-weight:bold;text-align:left;}'+
+            '#'+PANEL_ID+' .rn{flex:1;text-align:left;font-size:12px;}'+
+            '#'+PANEL_ID+'.fold .rb{display:none;}'+
+            '#'+PANEL_ID+'.fold .rs{display:none;}'+
+            '#'+PANEL_ID+'.fold .rr{display:none;}'+
+            '#'+PANEL_ID+'.fold .rh_fold{display:block;}'+
+            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;}'+
+            '#'+PANEL_ID+' .rh_top{color:#666;font-size:11px;}';
+            document.head.appendChild(s);
+        }
+        var el = document.getElementById(PANEL_ID);
+        if (!el) { el = document.createElement('div'); el.id = PANEL_ID; document.body.appendChild(el); }
+
+        var dragging = false, ox = 0, oy = 0;
+        el.onmousedown = function(e) { if(e.target.closest('.rcb,.rh_fold,.rb'))return; dragging=true; ox=e.clientX-el.offsetLeft; oy=e.clientY-el.offsetTop; };
+        document.onmousemove = function(e){ if(dragging){el.style.left=(e.clientX-ox)+'px';el.style.top=(e.clientY-oy)+'px';el.style.right='auto';}};
+        document.onmouseup = function(){ dragging=false; };
+
+        var allList = data.inspectors || [];
+        var sites = data.sites || {};
+        var lgList = sites[mySite] || [];
+
+        function byCount(a,b){ return b.count - a.count; }
+        var countRank = lgList.slice().sort(byCount);
+
+        var self = null;
+        for (var ti = 0; ti < countRank.length; ti++) { if (countRank[ti].inspector === myName) { self = countRank[ti]; break; } }
+
+        var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
+        html += '<div class="rh_fold">展开排名</div>';
+        html += '<div class="rb">';
+        html += '<div class="rs">昨日排名</div>';
+        for (var i = 0; i < countRank.length; i++) {
+            var cr = countRank[i];
+            html += '<div class="rr"><span class="rk">' + (i+1) + '</span><span class="rn">' + cr.inspector + ' ' + cr.count + '</span></div>';
+        }
+        html += '</div>';
+        el.innerHTML = html;
+        if (GM_getValue('qc_rank_fold', false)) el.classList.add('fold');
+        setTimeout(function() {
+            var fcb = el.querySelector('.rcb');
+            if (fcb) fcb.onclick = function() { el.classList.toggle('fold'); GM_setValue('qc_rank_fold', el.classList.contains('fold')); };
+            var fed = el.querySelector('.rh_fold');
+            if (fed) fed.onclick = function() { el.classList.remove('fold'); GM_setValue('qc_rank_fold', false); };
+        }, 50);
+    }
+
+    function fetchRank() {
+        // 只对潘瑶显示
+        var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
+        if (!/潘瑶|pan.*yao/i.test(myName)) return;
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CLOUD_FN_URL + '/rank',
+            onload: function(resp) {
+                try {
+                    var r = JSON.parse(resp.responseText);
+                    if (r.code === 0 && r.data) {
+                        var parts = myName.split('-');
+                        var myInspector = parts.length >= 2 ? parts[1] : '';
+                        var mySite = parts.length >= 4 ? (parts[2] + '-' + parts[3]) : '深圳-龙岗';
+                        showRankPanel(r.data, myInspector, mySite);
+                    }
+                } catch(e) {}
+            }
+        });
+    }
+    // 整点更新(8-23点)
+    function scheduleNextFetch(){
+        var now=new Date();
+        var h=now.getHours();
+        if(h<8||h>=23)return;
+        var next=new Date(now);
+        next.setHours(h+1,0,0,0);
+        var delay=next-now;
+        setTimeout(function(){fetchRank(); scheduleNextFetch();},delay);
+    }
+    setTimeout(function(){fetchRank(); scheduleNextFetch();}, 4000);
 
     function checkUpdate() {
         if (!shouldCheck(A_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
