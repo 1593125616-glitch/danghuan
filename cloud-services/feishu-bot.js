@@ -251,6 +251,11 @@ async function pollMessages() {
       }
     }
     if (!mentionItem || processedIds.has(mentionItem.message_id)) return;
+    // 超过30分钟的旧消息不处理
+    if (mentionItem.create_time) {
+      var msgTime = parseInt(mentionItem.create_time);
+      if (Date.now() - msgTime > 30 * 60 * 1000) { processedIds.add(mentionItem.message_id); return; }
+    }
     processedIds.add(mentionItem.message_id);
 
     // 检查文本命令
