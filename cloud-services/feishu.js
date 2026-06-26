@@ -31,8 +31,8 @@ async function feishuPut(url, body) {
   return data;
 }
 
-async function feishuDelete(url) {
-  const { data } = await axios.delete(url, { headers: headers() });
+async function feishuDelete(url, body) {
+  const { data } = await axios.delete(url, { headers: headers(), data: body });
   return data;
 }
 
