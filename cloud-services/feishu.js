@@ -26,13 +26,8 @@ async function feishuPost(url, body) {
   return data;
 }
 
-async function feishuPatch(url, body) {
-  const { data } = await axios.patch(url, body, { headers: headers() });
-  return data;
-}
-
 async function feishuPut(url, body) {
-  const { data } = await axios.put(url, body, { headers: headers() });
+  const { data } = await axios.put(url, JSON.stringify(body), { headers: headers() });
   return data;
 }
 
@@ -59,4 +54,4 @@ async function sendMsg(text) {
   );
 }
 
-module.exports = { getToken, feishuGet, feishuPost, feishuPut, feishuPatch, feishuDelete, cloudGet, cloudPost, sendMsg };
+module.exports = { getToken, feishuGet, feishuPost, feishuPut, feishuDelete, cloudGet, cloudPost, sendMsg };

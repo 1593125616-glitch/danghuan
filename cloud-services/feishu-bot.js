@@ -1,4 +1,4 @@
-const { getToken, feishuGet, feishuPost, feishuPut, feishuPatch, feishuDelete, cloudGet, cloudPost, sendMsg } = require('./feishu');
+const { getToken, feishuGet, feishuPost, feishuPut, feishuDelete, cloudGet, cloudPost, sendMsg } = require('./feishu');
 const CONFIG = require('./config');
 const XLSX = require('xlsx');
 
@@ -207,7 +207,7 @@ async function doWarranty(token, duckAll) {
     for (var ui = 0; ui < updates.length; ui += 500) {
       var ub = updates.slice(ui, ui + 500);
       try {
-        var ur = await feishuPatch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
+        var ur = await feishuPut(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
         console.log('[机器人] 批量更新OK返回:', JSON.stringify(ur).substring(0, 200));
       } catch(e) {
         console.error('[机器人] 批量更新失败:', e.message, e.response ? JSON.stringify(e.response.data) : '');
