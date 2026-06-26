@@ -24,6 +24,21 @@ function wText(d) {
   return '保修时长≥330天';
 }
 
+function nearBoundary(days) {
+  var bounds = [30, 110, 190, 250, 330];
+  for (var bi = 0; bi < bounds.length; bi++) { if (days >= bounds[bi] && days < bounds[bi] + 5) return true; }
+  return false;
+}
+
+function wTextLower(days) {
+  if (days < 35) return '保修时长<30天';
+  if (days < 115) return '30天≤保修时长<110天';
+  if (days < 195) return '110天≤保修时长<190天';
+  if (days < 255) return '190天≤保修时长<250天';
+  if (days < 335) return '250天≤保修时长<330天';
+  return '保修时长≥330天';
+}
+
 async function deleteOldTables(token) {
   var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables?page_size=50`);
   if (tabs.code !== 0) return;
@@ -139,6 +154,7 @@ async function doWarranty(token, duckAll) {
       if (!wd) { noR.push({ imei, rid: rec.record_id, fields: fs }); continue; }
       var days = Math.floor((wd - today) / (1000 * 60 * 60 * 24));
       var ew = wText(days);
+      if (nearBoundary(days)) ew = wTextLower(days);
       var sku = ''; for (var sk in fs) { if (/sku|SKU/i.test(sk)) { sku = String(fs[sk]); break; } }
       var cw = ''; var parts = sku.split('|'); if (parts.length) cw = parts[parts.length - 1].trim();
       if (cw && cw !== ew) chg.push({ imei, days, ew, rid: rec.record_id, fields: fs });
@@ -193,10 +209,18 @@ async function doWarranty(token, duckAll) {
     }
   }
 
-  // Upload noR IMEIs
+  // Upload noR IMEIs with brand
   if (noR.length) {
-    var imeis = noR.map(r => r.imei);
-    try { await cloudPost('/baoxiu-upload', { imeis }); } catch(e) {}
+    var records = noR.map(r => {
+      var brand = '';
+      for (var fk in r.fields) { if (/品牌/i.test(fk)) { brand = String(r.fields[fk] || '').trim(); break; } }
+      return { imei: r.imei, brand };
+    });
+    for (var bi = 0; bi < records.length; bi += 50) {
+      var chunk = records.slice(bi, bi + 50);
+      try { await cloudPost('/baoxiu-upload', { records: chunk }); } catch(e) {}
+    }
+    console.log('[机器人] 已上传', noR.length, '条无记录IMEI');
   }
 
   var msg = '保修计算完成\n需改:' + chg.length + '  OK:' + ok.length + '  无记录:' + noR.length;
@@ -291,6 +315,74 @@ async function pollMessages() {
   }
 }
 
+// ===== 回填: 每5分钟从baoxiuchaxun填回表格 =====
+async function fillBackFromCloudBase() {
+  try {
+    var token = await getToken();
+    var result = await cloudGet('/baoxiuchaxun-list');
+    if (!result || result.code !== 0 || !result.data || !result.data.length) return;
+    console.log('[回填] 拿到', result.data.length, '条查询结果');
+
+    var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables?page_size=50`);
+    var rTab, wjlTab, cyTab;
+    for (var t of (tabs.data.items || [])) {
+      if (/手机保修复检/i.test(t.name)) rTab = t;
+      if (/无记录/i.test(t.name)) wjlTab = t;
+      if (/保修差异/i.test(t.name)) cyTab = t;
+    }
+    if (!rTab) return;
+
+    // Read all tables to build IMEI index
+    async function loadAll(tid) {
+      var rs = [], pt = '';
+      while (true) {
+        var u = `https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${tid}/records?page_size=500`;
+        if (pt) u += '&page_token=' + pt;
+        var rp = await feishuGet(u);
+        if (rp.code !== 0 || !rp.data.items.length) break;
+        rs = rs.concat(rp.data.items);
+        if (!rp.data.has_more) break;
+        pt = rp.data.page_token;
+      }
+      return rs;
+    }
+    var recMap = {}, wjlSet = {};
+    var all = await loadAll(rTab.table_id);
+    for (var r of all) {
+      var im = ''; for (var fk in (r.fields||{})) { if (fk === 'IMEI') { im = String(r.fields[fk]||'').replace(/[\s\t\r\n]/g, ''); break; } }
+      if (im && !recMap[im]) { var sk = ''; for (var skk in (r.fields||{})) { if (/sku|SKU/i.test(skk)) { sk = String(r.fields[skk]); break; } } recMap[im] = { rid: r.record_id, sku: sk, fields: r.fields }; }
+    }
+    if (wjlTab) {
+      var wAll = await loadAll(wjlTab.table_id);
+      for (var wr of wAll) { var wim2 = ''; for (var wk2 in (wr.fields||{})) { if (wk2 === 'IMEI') { wim2 = String(wr.fields[wk2]||'').replace(/[\s\t\r\n]/g, ''); break; } } if (wim2 && !recMap[wim2]) { var wsk2 = ''; for (var wskk2 in (wr.fields||{})) { if (/sku|SKU/i.test(wskk2)) { wsk2 = String(wr.fields[wskk2]); break; } } recMap[wim2] = { rid: wr.record_id, sku: wsk2, fields: wr.fields }; } wjlSet[wim2] = wr.record_id; }
+    }
+
+    var done = 0, fail = 0, chgC = 0, mainB = [], chgB = [], delIds = [];
+    for (var cx of result.data) {
+      var imei = cx.imei, days = cx.days || 0;
+      if (!wjlSet[imei]) continue;
+      var rec = recMap[imei]; if (!rec) continue;
+      var isFail = days === -999999;
+      if (isFail) { fail++; continue; }
+      var ew2 = wText(days), cw2 = '';
+      if (rec.sku) { var p2 = rec.sku.split('|'); if (p2.length) cw2 = p2[p2.length - 1].trim(); }
+      var isChg = cw2 && cw2 !== ew2;
+      var rf = {}; for (var fk3 in rec.fields) rf[fk3] = String(rec.fields[fk3] || '');
+      rf['出库时间'] = isChg ? ew2 : (days + '天');
+      (isChg ? chgB : mainB).push({ fields: rf });
+      if (isChg) chgC++; else done++;
+      delIds.push(wjlSet[imei]);
+    }
+
+    if (mainB.length && rTab) for (var mi = 0; mi < mainB.length; mi += 500) try { await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_create`, { records: mainB.slice(mi, mi + 500) }); } catch(e) {}
+    if (chgB.length && cyTab) for (var ci = 0; ci < chgB.length; ci += 500) try { await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${cyTab.table_id}/records/batch_create`, { records: chgB.slice(ci, ci + 500) }); } catch(e) {}
+    for (var di of delIds) try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${wjlTab.table_id}/records/${di}`); } catch(e) {}
+    if (done || fail) console.log('[回填] 回填:', done, '失败:', fail, '差异:', chgC);
+  } catch(e) { console.error('[回填] 异常:', e.message); }
+}
+
 console.log('[机器人] 云托管服务已启动');
 setInterval(pollMessages, 30000);
+setInterval(fillBackFromCloudBase, 300000);
 pollMessages();
+fillBackFromCloudBase();
