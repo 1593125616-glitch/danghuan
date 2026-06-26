@@ -1,0 +1,13 @@
+{
+  "name": "zhijian-cloud-services",
+  "version": "1.0.0",
+  "description": "质检B同步 + 飞书保修机器人 云托管服务",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.x",
+    "xlsx": "^0.18.5"
+  }
+}
