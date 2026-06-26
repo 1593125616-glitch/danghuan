@@ -80,6 +80,11 @@ function parseSubmitTime(r) {
 }
 
 async function syncData() {
+  // 分布式锁: 防止多实例同时同步
+  try {
+    var lockResp = await cloudPost('/poll-lock', { mid: 'zb_sync_data' });
+    if (lockResp && lockResp.code !== 0) return;
+  } catch(e) {}
   try {
     var token = await getToken();
     var tblId = await getOrCreateWeeklyTable(token);
@@ -264,6 +269,11 @@ async function cleanupOldRankTables(token) {
 }
 
 async function syncRankToFeishu() {
+  // 分布式锁
+  try {
+    var lockResp = await cloudPost('/poll-lock', { mid: 'zb_rank_sync' });
+    if (lockResp && lockResp.code !== 0) return;
+  } catch(e) {}
   try {
     var token = await getToken();
     var data = await cloudGet('/rank');
