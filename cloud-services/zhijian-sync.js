@@ -50,20 +50,22 @@ function getWeekKey(d) {
 
 async function getOrCreateWeeklyTable(token) {
   var now = new Date(), key = getWeekKey(now);
-  // 查已有表
   var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables?page_size=50`);
   for (var t of (tabs.data.items || [])) {
     var day = now.getDay();
     var monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
     var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
     var m1 = monday.getFullYear() + '年' + (monday.getMonth() + 1) + '月' + monday.getDate();
-    var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
-    if (t.name.includes(m1)) return t.table_id;
+    if (t.name.includes(m1)) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
   }
-  // 新建
+  var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
+  var name = m1 + '-' + m2;
+  console.log('[质检B] 创建新周表:', name);
   var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables`,
-    { table: { name: m1 + '-' + m2, fields: TABLE_FIELDS } });
-  return cr.data ? cr.data.table_id : CONFIG.tableId;
+    { table: { name: name, fields: TABLE_FIELDS } });
+  var id = cr.data ? cr.data.table_id : '';
+  if (!id) console.error('[质检B] 创建周表失败:', JSON.stringify(cr).substring(0,200));
+  return id || CONFIG.tableId;
 }
 
 function parseCreatedAt(r) {
@@ -83,10 +85,12 @@ async function syncData() {
   try {
     var token = await getToken();
     var tblId = await getOrCreateWeeklyTable(token);
+    if (!tblId) { console.error('[质检B] 无法获取周表ID,跳过同步'); return; }
     var records = await cloudGet('/unpushed');
     if (!records || !records.data || !records.data.length) return;
 
-    console.log('[质检B] 待同步:', records.data.length);
+    var total = records.data.length;
+    console.log('[质检B] 待同步:', total, '条');
 
     var batch = [], ids = [], written = 0, skipped = 0;
     for (var rec of records.data) {
@@ -94,7 +98,6 @@ async function syncData() {
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
-      // 计算间隔/时效
       var ck = user.inspector ? (user.site || '') + '-' + user.inspector : '';
       var interval = '', efficiency = '';
       if (ck && prevCache[ck]) {
@@ -120,19 +123,22 @@ async function syncData() {
       written++;
 
       if (batch.length >= 500) {
-        await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch });
-        await cloudPost('/mark-pushed', { ids: ids });
-        console.log('[质检B] 已写入', written);
+        try {
+          var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch });
+          if (cr.code !== 0) console.error('[质检B] batch_create返回:', JSON.stringify(cr).substring(0,200));
+        } catch(e) { console.error('[质检B] batch_create异常:', e.message); }
+        try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); }
+        console.log('[质检B] 已写入', written, '/', total);
         batch = []; ids = [];
       }
     }
     if (batch.length) {
-      await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch });
-      await cloudPost('/mark-pushed', { ids: ids });
+      try { await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch }); } catch(e) { console.error('[质检B] 最后批次异常:', e.message); }
+      try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); }
     }
-    if (written) console.log('[质检B] 同步完成:', written);
+    if (written) console.log('[质检B] 同步完成:', written, '/', total);
   } catch(e) {
-    console.error('[质检B] 同步异常:', e.message);
+    console.error('[质检B] 同步异常:', e.message, e.stack ? e.stack.substring(0,200) : '');
   }
 }
 
@@ -143,13 +149,14 @@ function shouldRun() {
 }
 
 async function loop() {
-  if (shouldRun()) {
+  var h = new Date().getHours();
+  if (h >= 8 && h < 23) {
+    console.log('[质检B] 开始同步...');
     await syncData();
-    // 180天自动清理(每天检查一次)
     var today = new Date().toDateString();
     if (today !== lastCleanup) {
       lastCleanup = today;
-      try { var cr = await cloudPost('/cleanup', { days: 180 }); if (cr.deleted) console.log('[质检B] 清理旧数据:', cr.deleted, '条'); } catch(e) {}
+      try { var cr2 = await cloudPost('/cleanup', { days: 180 }); console.log('[质检B] 清理旧数据:', cr2.deleted||0, '条'); } catch(e) { console.error('[质检B] 清理异常:', e.message); }
     }
   }
   setTimeout(loop, 600000);
@@ -177,11 +184,13 @@ function fmtSec(sec) {
 async function ensureRankTable(token, tableName) {
   if (rankCache[tableName]) return rankCache[tableName];
   var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables?page_size=50`);
-  for (var t of (tabs.data.items || [])) { if (t.name === tableName) { rankCache[tableName] = t.table_id; return t.table_id; } }
+  for (var t of (tabs.data.items || [])) { if (t.name === tableName) { rankCache[tableName] = t.table_id; console.log('[排名] 已有表:', tableName, t.table_id); return t.table_id; } }
+  console.log('[排名] 创建表:', tableName);
   var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables`,
     { table: { name: tableName, fields: RANK_TABLE_FIELDS } });
   var id = cr.data ? cr.data.table_id : '';
-  if (id) rankCache[tableName] = id;
+  if (!id) console.error('[排名] 创建表失败:', JSON.stringify(cr).substring(0,200));
+  else rankCache[tableName] = id;
   return id;
 }
 
@@ -196,8 +205,9 @@ async function clearRankTable(token, tblId) {
     if (!rp.data.has_more) break; else pt = rp.data.page_token;
   }
   if (!items.length) return;
+  console.log('[排名] 清空表', tblId, items.length, '条记录');
   for (var i = 0; i < items.length; i += 500) {
-    try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records`, { records: items.slice(i, i + 500) }); } catch(e) {}
+    try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records`, { records: items.slice(i, i + 500) }); } catch(e) { console.error('[排名] 清空表异常:', e.message); }
   }
 }
 
@@ -266,39 +276,42 @@ async function cleanupOldRankTables(token) {
 async function syncRankToFeishu() {
   try {
     var token = await getToken();
+    console.log('[排名] 获取排名数据...');
     var data = await cloudGet('/rank');
-    if (!data || data.code !== 0 || !data.data) { console.log('[排名] 无数据'); return; }
+    if (!data || data.code !== 0 || !data.data) { console.log('[排名] 无数据, code:', data?data.code:'null'); return; }
     var rd = data.data;
 
     var now = new Date();
     var yesterday = new Date(now.getTime() - 24*60*60*1000);
     var dailyLabel = '昨日排名' + (yesterday.getMonth()+1) + '.' + yesterday.getDate();
-
     var dow = now.getDay(); if (dow === 0) dow = 7;
     var mon = new Date(now.getTime() - (dow-1)*24*60*60*1000);
     var sun = new Date(now);
     var weeklyLabel = '本周排名' + (mon.getMonth()+1) + '.' + mon.getDate() + '-' + (sun.getMonth()+1) + '.' + sun.getDate();
-
     var monthlyLabel = '本月排名' + (now.getMonth()+1) + '.1-' + (now.getMonth()+1) + '.' + now.getDate();
+    console.log('[排名] 标签:', dailyLabel, weeklyLabel, monthlyLabel);
 
     if (rd.daily && rd.daily.inspectors && rd.daily.inspectors.length) {
+      console.log('[排名] 写入日报:', rd.daily.inspectors.length, '人');
       var dt = await ensureRankTable(token, dailyLabel);
       await clearRankTable(token, dt);
       await writeRankTable(token, dt, dailyLabel, rd.daily.inspectors);
-    }
+    } else { console.log('[排名] 无日报数据'); }
     if (rd.weekly && rd.weekly.inspectors && rd.weekly.inspectors.length) {
+      console.log('[排名] 写入周报:', rd.weekly.inspectors.length, '人');
       var wt = await ensureRankTable(token, weeklyLabel);
       await clearRankTable(token, wt);
       await writeRankTable(token, wt, weeklyLabel, rd.weekly.inspectors);
-    }
+    } else { console.log('[排名] 无周报数据'); }
     if (rd.monthly && rd.monthly.inspectors && rd.monthly.inspectors.length) {
+      console.log('[排名] 写入月报:', rd.monthly.inspectors.length, '人');
       var mt = await ensureRankTable(token, monthlyLabel);
       await clearRankTable(token, mt);
       await writeRankTable(token, mt, monthlyLabel, rd.monthly.inspectors);
-    }
+    } else { console.log('[排名] 无月报数据'); }
     await cleanupOldRankTables(token);
     console.log('[排名] 同步完成');
-  } catch(e) { console.error('[排名] 异常:', e.message); }
+  } catch(e) { console.error('[排名] 异常:', e.message, e.stack ? e.stack.substring(0,200) : ''); }
 }
 
 // 每天8:00-8:59自动同步排名
