@@ -209,7 +209,9 @@ async function doWarranty(token, duckAll) {
       try {
         var ur = await feishuPut(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
         console.log('[机器人] 批量更新OK返回:', JSON.stringify(ur).substring(0, 200));
-      } catch(e) { console.error('[机器人] 批量更新失败:', e.message); }
+      } catch(e) {
+        console.error('[机器人] 批量更新失败:', e.message, e.response ? JSON.stringify(e.response.data) : '');
+      }
     }
   }
 
