@@ -200,24 +200,14 @@ async function doWarranty(token, duckAll) {
     }
   }
 
-  // Batch update ok records - 先读字段列表找真实的"出库时间"字段名
+  // Batch update ok records
   if (ok.length) {
-    var timeField = '出库时间';
-    try {
-      var fieldList = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/fields`);
-      if (fieldList.data && fieldList.data.items) {
-        for (var fi3 of fieldList.data.items) {
-          if (/出库时间/.test(fi3.field_name)) { timeField = fi3.field_name; break; }
-        }
-      }
-    } catch(e) {}
-    console.log('[机器人] 出库时间字段名:', timeField);
-    var updates = ok.map(function(o) { var f = {}; f[timeField] = o.days + '天'; return { record_id: o.rid, fields: f }; });
+    var updates = ok.map(o => ({ record_id: o.rid, fields: { '出库时间': o.days + '天' } }));
     console.log('[机器人] 批量更新OK:', updates.length, '条, sample:', JSON.stringify(updates[0]));
     for (var ui = 0; ui < updates.length; ui += 500) {
       var ub = updates.slice(ui, ui + 500);
       try {
-        var ur = await feishuPut(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
+        var ur = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
         console.log('[机器人] 批量更新OK返回:', JSON.stringify(ur).substring(0, 200));
       } catch(e) {
         console.error('[机器人] 批量更新失败:', e.message, e.response ? JSON.stringify(e.response.data) : '');
