@@ -225,11 +225,50 @@ async function pollMessages() {
     if (!mentionItem || processedIds.has(mentionItem.message_id)) return;
     processedIds.add(mentionItem.message_id);
 
-    // Collect files after mention
+    // 检查文本命令
+    try {
+      var content = JSON.parse(mentionItem.body.content);
+      var text = content.text || '';
+
+      // "重新查询"命令
+      if (/重新查询/.test(text)) {
+        console.log('[机器人] 重新查询');
+        // 直接从消息列表收集文件(跳过文本命令消息,收集其后的Excel文件)
+        var rfiles = [];
+        var mi = items.indexOf(mentionItem);
+        for (var j = mi + 1; j < items.length; j++) {
+          var pm = items[j];
+          if (processedIds.has(pm.message_id)) break;
+          if (pm.msg_type === 'file') {
+            try {
+              var fc = JSON.parse(pm.body.content);
+              if (/\.xlsx?$/i.test(fc.file_name || '')) {
+                rfiles.push({ msgId: pm.message_id, fileKey: fc.file_key, name: fc.file_name.replace(/\.xlsx?$/i, '') });
+              }
+            } catch(e) {}
+          }
+        }
+        if (!rfiles.length) { await sendMsg('无上次查询记录'); return; }
+        await sendMsg('收到' + rfiles.length + '个文件(重新查询)');
+        var duck2 = await doImport(token, rfiles);
+        await sendMsg('导入完成,计算保修...');
+        await doWarranty(token, duck2);
+        return;
+      }
+
+      // "删除表格"命令
+      if (/删除表格/.test(text)) {
+        await deleteOldTables(token);
+        await sendMsg('已删除手机保修复检/保修差异/无记录表');
+        return;
+      }
+    } catch(e) {}
+
+    // Collect files after mention (regular processing)
     var files = [];
-    var mi = items.indexOf(mentionItem);
-    for (var j = mi + 1; j < items.length; j++) {
-      var pm = items[j];
+    var mIdx = items.indexOf(mentionItem);
+    for (var j2 = mIdx + 1; j2 < items.length; j2++) {
+      var pm = items[j2];
       if (processedIds.has(pm.message_id)) break;
       if (pm.msg_type === 'file') {
         try {
