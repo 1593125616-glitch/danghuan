@@ -245,8 +245,6 @@ async function pollMessages() {
     var mentionItem = null;
     for (var item of items) {
       var mentions = item.mentions || [];
-      // 调试: 打印第一个@消息的mention列表
-      if (mentions.length && !mentionItem) console.log('[机器人] mention检查:', JSON.stringify(mentions.map(m=>({name:m.name,id:m.id,key:m.key}))), 'botName:', CONFIG.botName);
       if (mentions.some(m => m.name === CONFIG.botName) && item.msg_type !== 'file') {
         mentionItem = item;
         break;
