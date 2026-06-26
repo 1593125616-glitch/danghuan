@@ -171,16 +171,14 @@
         console.log('[质检] 扫码时间:', barcodeTime);
     }
 
-    // 轮询检测条码变化(VUE v-model不触发DOM事件)
-    function watchBarcodeInput(){
+    // 轮询检测条码变化(VUE v-model不触发DOM事件，每次重新获取input以防Vue重建DOM)
+    setInterval(function(){
         var inp = document.querySelector('input[placeholder="请输入物品条码"]');
-        if(!inp){setTimeout(watchBarcodeInput,500);return;}
-        setInterval(function(){
-            var v = inp.value.trim();
-            if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
-        }, 500);
-    }
-    watchBarcodeInput();
+        if(!inp) return;
+        var v = inp.value.trim();
+        if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
+        else if(!v && lastBarcode){ lastBarcode = ''; }
+    }, 500);
 
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button');
@@ -209,7 +207,7 @@
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
-                lastBarcode = ''; barcodeTime = '';
+                lastBarcode = data.barcode; barcodeTime = '';
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }
