@@ -16,6 +16,7 @@ const TABLE_FIELDS = [
 
 // 缓存: 同用户的上一条 createdAt 用于计算间隔
 let prevCache = {};
+let lastCleanup = '';
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -142,7 +143,15 @@ function shouldRun() {
 }
 
 async function loop() {
-  if (shouldRun()) await syncData();
+  if (shouldRun()) {
+    await syncData();
+    // 180天自动清理(每天检查一次)
+    var today = new Date().toDateString();
+    if (today !== lastCleanup) {
+      lastCleanup = today;
+      try { var cr = await cloudPost('/cleanup', { days: 180 }); if (cr.deleted) console.log('[质检B] 清理旧数据:', cr.deleted, '条'); } catch(e) {}
+    }
+  }
   setTimeout(loop, 600000);
 }
 
