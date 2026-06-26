@@ -203,9 +203,13 @@ async function doWarranty(token, duckAll) {
   // Batch update ok records
   if (ok.length) {
     var updates = ok.map(o => ({ record_id: o.rid, fields: { '出库时间': o.days + '天' } }));
+    console.log('[机器人] 批量更新OK:', updates.length, '条, sample:', JSON.stringify(updates[0]));
     for (var ui = 0; ui < updates.length; ui += 500) {
       var ub = updates.slice(ui, ui + 500);
-      try { await feishuPut(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub }); } catch(e) {}
+      try {
+        var ur = await feishuPut(`https://open.feishu.cn/open-apis/bitable/v1/apps/${BITABLE}/tables/${rTab.table_id}/records/batch_update`, { records: ub });
+        console.log('[机器人] 批量更新OK返回:', JSON.stringify(ur).substring(0, 200));
+      } catch(e) { console.error('[机器人] 批量更新失败:', e.message); }
     }
   }
 
