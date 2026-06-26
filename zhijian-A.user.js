@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.12
+// @version      2.20
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -163,6 +163,7 @@
 
     let barcodeTime = '';
     let lastBarcode = '';
+    let lastUploadedKey = '';
 
     function recordBarcodeTime(){
         var now = new Date();
@@ -204,6 +205,14 @@
                         return;
                     }
                 }
+                // 去重：barcode + step + userName 与上次完全一致则跳过
+                var thisKey = data.barcode + '|' + data.step + '|' + data.userName;
+                if (thisKey === lastUploadedKey) {
+                    console.log('[质检] 重复提交，跳过:', data.barcode, data.step);
+                    lastBarcode = data.barcode; barcodeTime = '';
+                    return;
+                }
+                lastUploadedKey = thisKey;
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
