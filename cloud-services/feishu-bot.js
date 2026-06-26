@@ -247,11 +247,6 @@ async function pollMessages() {
       }
     }
     if (!mentionItem || processedIds.has(mentionItem.message_id)) return;
-    // 分布式锁: 多实例防重
-    try {
-      var lockResp = await cloudPost('/poll-lock', { mid: mentionItem.message_id });
-      if (lockResp && lockResp.code !== 0) { console.log('[机器人] 已被其他实例锁定,跳过'); return; }
-    } catch(e) {}
     processedIds.add(mentionItem.message_id);
 
     // 检查文本命令
@@ -262,8 +257,6 @@ async function pollMessages() {
       // "重新查询"命令
       if (/重新查询/.test(text)) {
         console.log('[机器人] 重新查询');
-        // 分布式锁
-        try { var rl = await cloudPost('/poll-lock', { mid: mentionItem.message_id }); if (rl && rl.code !== 0) { console.log('[机器人] 重新查询已被锁定,跳过'); return; } } catch(e) {}
         // 直接从消息列表收集文件(跳过文本命令消息,收集其后的Excel文件)
         var rfiles = [];
         var mi = items.indexOf(mentionItem);
