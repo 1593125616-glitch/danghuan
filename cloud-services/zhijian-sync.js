@@ -198,12 +198,13 @@ async function ensureRankTable(token, tableName) {
 }
 
 async function clearRankTable(token, tblId) {
+  if (!tblId) return;
   var items = [], pt = '';
   while (true) {
     var u = `https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records?page_size=500`;
     if (pt) u += '&page_token=' + pt;
     var rp = await feishuGet(u);
-    if (rp.code !== 0 || !rp.data.items.length) break;
+    if (rp.code !== 0 || !rp.data || !rp.data.items || !rp.data.items.length) break;
     items = items.concat(rp.data.items.map(x => x.record_id));
     if (!rp.data.has_more) break; else pt = rp.data.page_token;
   }
