@@ -1,4 +1,4 @@
-const { getToken, feishuGet, feishuPost, cloudGet, cloudPost } = require('./feishu');
+const { getToken, feishuGet, feishuPost, feishuDelete, cloudGet, cloudPost } = require('./feishu');
 const CONFIG = require('./config');
 
 const TABLE_FIELDS = [
@@ -222,6 +222,35 @@ function getStepText(s, stepKey) {
   if (!g || !g.count) return '';
   var rank = (s.stepRanks && s.stepRanks[stepKey]) ? s.stepRanks[stepKey].inspRank : 0;
   return (s.site||'') + s.inspector + ' 排名' + rank + ' ' + fmtSec(g.avgInspTime);
+}
+
+async function writeRankTable(token, tblId, label, inspectors) {
+  var sorted = formatInspectors(inspectors);
+  if (!sorted.length) return;
+  var records = [];
+  for (var i = 0; i < sorted.length; i++) {
+    var s = sorted[i];
+    var fields = {};
+    fields['统计时间'] = label;
+    fields['质检数'] = (s.site||'') + s.inspector + ' ' + s.count + '台';
+    fields['时效排名'] = (s.inspRank||'') + ' ' + fmtSec(s.avgTime);
+    fields['平均时效'] = (s.site||'') + s.inspector + ' ' + fmtSec(s.avgTime);
+    fields['间隔排名'] = (s.intervalRank||'') + ' ' + fmtSec(s.totalInterval);
+    fields['总间隔'] = (s.site||'') + s.inspector + ' ' + fmtSec(s.totalInterval);
+    fields['第一步'] = getStepText(s, 'step1');
+    fields['第二步'] = getStepText(s, 'step2');
+    fields['第三步'] = getStepText(s, 'step3');
+    fields['第四步'] = getStepText(s, 'step4');
+    records.push({ fields: fields });
+    if (records.length >= 500) {
+      await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: records });
+      records = [];
+    }
+  }
+  if (records.length) {
+    await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: records });
+  }
+  console.log('[排名] 已写入:', label, sorted.length, '人');
 }
 
 async function cleanupOldRankTables(token) {
