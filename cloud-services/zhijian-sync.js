@@ -217,48 +217,11 @@ async function clearRankTable(token, tblId) {
 
 function formatInspectors(inspectors) { return (inspectors||[]).slice().sort((a,b)=>b.count-a.count); }
 
-function buildCountText(sorted) { return sorted.map(s=>(s.site||'')+s.inspector+s.count+'台').join('\n'); }
-
-function buildInspRankText(sorted) {
-  var rs = sorted.slice().sort((a,b)=>a.avgTime-b.avgTime);
-  return rs.map(s=>(s.site||'')+s.inspector+fmtSec(s.avgTime)).join('\n');
-}
-
-function buildAvgTimeText(sorted) { return sorted.map(s=>(s.site||'')+s.inspector+fmtSec(s.avgTime)).join('\n'); }
-
-function buildIntervalRankText(sorted) {
-  var rs = sorted.slice().sort((a,b)=>b.totalInterval-a.totalInterval);
-  return rs.map(s=>(s.site||'')+s.inspector+fmtSec(s.totalInterval)).join('\n');
-}
-
-function buildTotalIntervalText(sorted) { return sorted.map(s=>(s.site||'')+s.inspector+fmtSec(s.totalInterval)).join('\n'); }
-
-function buildStepText(sorted, stepKey) {
-  var withStep = sorted.filter(s=>s.stepGroups&&s.stepGroups[stepKey]&&s.stepGroups[stepKey].count>0);
-  if (!withStep.length) return '';
-  var stepSorted = withStep.slice().sort((a,b)=>a.stepGroups[stepKey].avgInspTime-b.stepGroups[stepKey].avgInspTime);
-  return stepSorted.map(s=>{
-    var rank = (s.stepRanks&&s.stepRanks[stepKey])?s.stepRanks[stepKey].inspRank:0;
-    return (s.site||'')+s.inspector+'排名'+rank+' '+fmtSec(s.stepGroups[stepKey].avgInspTime);
-  }).join('\n');
-}
-
-async function writeRankTable(token, tblId, label, inspectors) {
-  var sorted = formatInspectors(inspectors);
-  if (!sorted.length) return;
-  var fields = {};
-  fields['统计时间'] = label;
-  fields['质检数'] = buildCountText(sorted);
-  fields['时效排名'] = buildInspRankText(sorted);
-  fields['平均时效'] = buildAvgTimeText(sorted);
-  fields['间隔排名'] = buildIntervalRankText(sorted);
-  fields['总间隔'] = buildTotalIntervalText(sorted);
-  fields['第一步'] = buildStepText(sorted, 'step1') || '';
-  fields['第二步'] = buildStepText(sorted, 'step2') || '';
-  fields['第三步'] = buildStepText(sorted, 'step3') || '';
-  fields['第四步'] = buildStepText(sorted, 'step4') || '';
-  await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records`, { fields: fields });
-  console.log('[排名] 已写入:', label);
+function getStepText(s, stepKey) {
+  var g = s.stepGroups && s.stepGroups[stepKey];
+  if (!g || !g.count) return '';
+  var rank = (s.stepRanks && s.stepRanks[stepKey]) ? s.stepRanks[stepKey].inspRank : 0;
+  return (s.site||'') + s.inspector + ' 排名' + rank + ' ' + fmtSec(g.avgInspTime);
 }
 
 async function cleanupOldRankTables(token) {
