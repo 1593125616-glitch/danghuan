@@ -14,9 +14,13 @@ const TABLE_FIELDS = [
   {"field_name":"分步质检","type":1}
 ];
 
-// 缓存: 同用户上一条 createdAt/submitTime 用于跨批次计算
+// 持久化缓存: 防止更新重启丢失上一台记录
+const fs = require('fs');
+const CACHE_FILE = '/tmp/zb_lastrec.json';
 let lastRec = {};
 let lastCleanup = '';
+try { lastRec = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); console.log('[质检B] 加载缓存:', Object.keys(lastRec).length, '人'); } catch(e) { lastRec = {}; }
+function saveRec() { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(lastRec)); } catch(e) {} }
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -109,7 +113,7 @@ async function syncData() {
         if (lastRec[ck].createdAt && submitTime > 0) interval = fmtDiff(submitTime - lastRec[ck].createdAt);
         if (lastRec[ck].createdAt && createdAt > 0) efficiency = fmtDiff(createdAt - lastRec[ck].createdAt);
       }
-      lastRec[ck] = { createdAt: createdAt, submitTime: submitTime };
+      lastRec[ck] = { createdAt: createdAt, submitTime: submitTime }; saveRec();
 
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
