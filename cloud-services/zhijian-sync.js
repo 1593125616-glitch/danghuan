@@ -70,8 +70,10 @@ async function getOrCreateWeeklyTable(token) {
 
 function parseCreatedAt(r) {
   if (!r.createdAt) return 0;
-  if (r.createdAt.$date) return r.createdAt.$date;
-  if (typeof r.createdAt === 'number') return r.createdAt;
+  var v = r.createdAt;
+  if (v.$date) return v.$date;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') { var d = new Date(v); return isNaN(d.getTime()) ? 0 : d.getTime(); }
   return 0;
 }
 
