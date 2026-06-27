@@ -87,6 +87,7 @@ async function syncData() {
     var tblId = await getOrCreateWeeklyTable(token);
     if (!tblId) { console.error('[质检B] 无法获取周表ID,跳过同步'); return; }
     var records = await cloudGet('/unpushed');
+    console.log('[质检B] unpushed返回: code='+(records?records.code:'null')+' 数据量='+((records&&records.data)?records.data.length:'null'));
     if (!records || !records.data || !records.data.length) return;
 
     var total = records.data.length;
