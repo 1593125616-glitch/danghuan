@@ -294,11 +294,21 @@
         html += '<div class="rs">昨日排名</div>';
         if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
 
-        // 龙岗: 最多10人
+        // 龙岗: 最多10人 (从sites取)
         var lgList = (sites[mySite] || []).slice(0, 10);
         for (var j = 0; j < lgList.length; j++) {
             var p = lgList[j];
             html += '<div class="rr"><span class="rk">'+(j+1)+'</span><span class="rn">'+p.inspector+' '+p.count+'台</span></div>';
+        }
+
+        // 跨站点综合排名: 每种步骤取各自站点前N,组成总排名
+        var crList = data.crossRank || [];
+        if (crList.length) {
+            html += '<div class="rs">综合排名</div>';
+            for (var ci = 0; ci < crList.length; ci++) {
+                var cr2 = crList[ci];
+                html += '<div class="rr"><span class="rk">'+(ci+1)+'</span><span class="rn">'+cr2.inspector+' '+cr2.count+'台</span></div>';
+            }
         }
 
         html += '</div>';
