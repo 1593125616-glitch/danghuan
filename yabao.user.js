@@ -685,7 +685,7 @@
 
     // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
     const YB_CHECK_KEY = 'yabao_last_update_check';
-    const YB_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+    const YB_CHECK_INTERVAL = 60 * 60 * 1000;
     const YB_SCRIPT_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js';
 
     function isNewerVer(remote, current) {
@@ -718,10 +718,8 @@
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
-                    log(`检测到新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
-                    if (confirm(`鸭宝脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
-                        window.location.href = YB_SCRIPT_URL;
-                    }
+                    log('检测到新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
+                    window.location.href = YB_SCRIPT_URL;
                 } else {
                     markCheckDone();
                 }
