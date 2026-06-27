@@ -244,7 +244,7 @@ async function computeLocalRank() {
     for (var name in userMap) {
       var ug = userMap[name];
       ug.records.sort(function(a, b) { return getAt(a) - getAt(b); });
-      var siteMaxGap = /深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000;
+      var siteMaxGap = maxGap > 0 ? maxGap : (/深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000);
       var intervalSum = 0;    // 间隔时间: sum of (submitTime - prevCreatedAt) with filter
       var totalGapSum = 0;    // 总间隔: sum of (createdAt - prevCreatedAt) no filter
       var validCount = 0;
@@ -318,10 +318,14 @@ async function computeLocalRank() {
   var weeklyData = filterByTime(items, weekStart, weekEnd);
   var monthlyData = filterByTime(items, monthStart, monthEnd);
 
+  // daily用龙岗1.5h/其他2h, weekly/monthly用5h剔除休息时间
+  var dailyMaxGap = 7200000;
+  var longMaxGap = 18000000; // 5小时
+
   return {
-    daily: { inspectors: calcStats(dailyData, 7200000) },
-    weekly: { inspectors: calcStats(weeklyData, 7200000) },
-    monthly: { inspectors: calcStats(monthlyData, 7200000) }
+    daily: { inspectors: calcStats(dailyData, 0) },
+    weekly: { inspectors: calcStats(weeklyData, longMaxGap) },
+    monthly: { inspectors: calcStats(monthlyData, longMaxGap) }
   };
 }
 const RANK_TABLE_FIELDS = [
