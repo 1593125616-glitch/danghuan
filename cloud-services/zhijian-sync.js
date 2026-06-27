@@ -150,10 +150,8 @@ function shouldRun() {
 }
 
 async function loop() {
-  // 北京时间 (UTC+8)
-  var beijing = new Date(new Date().getTime() + 8*60*60*1000);
-  var h = beijing.getUTCHours();
-  console.log('[质检B] 心跳 北京时间='+h+'时');
+  var h = new Date().getHours();
+  console.log('[质检B] 心跳', h, '时');
   if (h >= 8 && h < 24) {
     console.log('[质检B] 开始同步...');
     await syncData();
@@ -322,8 +320,8 @@ async function syncRankToFeishu() {
 // 每天8:00-8:59自动同步排名
 let lastRankDate = '';
 setInterval(function() {
-  var beijing2 = new Date(new Date().getTime() + 8*60*60*1000);
-  if (beijing2.getUTCHours() !== 8) return;
+  var now = new Date();
+  if (now.getHours() !== 8) return;
   var dk = now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
   if (dk === lastRankDate) return;
   lastRankDate = dk;
