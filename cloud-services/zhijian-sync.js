@@ -98,7 +98,7 @@ async function syncData() {
       var user = parseUserName(rec.userName);
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
-      if (written < 3) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'user:', user.inspector);
+      if (written < 3) console.log('[质检B] 记录', written, 'createdAt_raw:', JSON.stringify(rec.createdAt), 'submitTime:', submitTime, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
       var ck = user.inspector ? (user.site || '') + '-' + user.inspector : '';
       var interval = '', efficiency = '';
