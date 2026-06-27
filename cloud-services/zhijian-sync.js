@@ -241,20 +241,18 @@ async function computeLocalRank() {
       var ug = userMap[name];
       ug.records.sort(function(a, b) { return getAt(a) - getAt(b); });
       var siteMaxGap = /深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000;
-      // 间隔时效: sum of all (submitTime - prevCreatedAt), 不剔除长间隔
-      var allIntervalSum = 0, allEfficiencySum = 0, validCount = 0;
-      // 分步计数: qj(1/1), sku(1/4), gn(2/4), cx(3/4), wg(4/4)
+      var intervalSum = 0;    // 间隔时间: sum of (submitTime - prevCreatedAt) with filter
+      var totalGapSum = 0;    // 总间隔: sum of (createdAt - prevCreatedAt) no filter
+      var validCount = 0;
       var stepCounts = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
-      // Per-step interval (for step-based ranking)
+      var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepInterval = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
-      var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 }; // inspection time per step
 
       for (var j = 0; j < ug.records.length; j++) {
         var rec = ug.records[j];
         var ct = getAt(rec), st = getSt(rec);
         if (!ct || !st) continue;
         validCount++;
-        var insp = ct - st;
         var step = rec.step || '';
         var m2 = step.match(/(\d+)\/(\d+)/);
         var sk = 'qj';
@@ -265,30 +263,31 @@ async function computeLocalRank() {
           else if (m2[1] === '4') sk = 'wg';
         }
         stepCounts[sk]++;
-        stepTime[sk] += insp;
 
         if (j > 0) {
           var prevAt = getAt(ug.records[j - 1]);
+          // 间隔时间: submitTime - prevCreatedAt, 剔除长间隔
           var gap = st - prevAt;
           if (gap > 0 && gap < siteMaxGap) {
-            allIntervalSum += gap;
+            intervalSum += gap;
             stepInterval[sk] += gap;
           }
-          var effGap = ct - prevAt;
-          if (effGap > 0) allEfficiencySum += effGap;
+          // 总间隔: createdAt - prevCreatedAt, 不剔除
+          var tg = ct - prevAt;
+          if (tg > 0) totalGapSum += tg;
         }
       }
 
-      var avgEfficiency = validCount > 1 ? Math.round(allEfficiencySum / (validCount - 1) / 1000) : 0;
+      // 总间隔平均 = sum / (count-1), 取第2台开始算
+      var avgTotalGap = validCount > 1 ? Math.round(totalGapSum / (validCount - 1) / 1000) : 0;
 
       result.push({
         inspector: name,
         site: ug.site,
         count: validCount,
-        totalInterval: Math.round(allIntervalSum / 1000),
-        avgEfficiency: avgEfficiency,
+        totalInterval: Math.round(intervalSum / 1000),   // 间隔时间(秒)
+        avgTotalGap: avgTotalGap,                          // 总间隔平均(秒)
         steps: { qj: stepCounts.qj, sku: stepCounts.sku, gn: stepCounts.gn, cx: stepCounts.cx, wg: stepCounts.wg },
-        // Per-step interval in seconds
         stepInt: { qj: Math.round(stepInterval.qj/1000), sku: Math.round(stepInterval.sku/1000), gn: Math.round(stepInterval.gn/1000), cx: Math.round(stepInterval.cx/1000), wg: Math.round(stepInterval.wg/1000) }
       });
     }
@@ -297,15 +296,15 @@ async function computeLocalRank() {
 
   function applyRanks(inspectors) {
     if (!inspectors.length) return;
-    // 间隔排名(降序)
+    // 间隔排名(降序,间隔时间大的排前面)
     var byInt = inspectors.slice().sort((a,b)=>b.totalInterval-a.totalInterval);
     var intR = {};
     for (var j = 0; j < byInt.length; j++) { if (j > 0 && byInt[j].totalInterval === byInt[j-1].totalInterval) intR[byInt[j].inspector] = intR[byInt[j-1].inspector]; else intR[byInt[j].inspector] = j + 1; }
-    // 平均效率排名(升序)
-    var byEff = inspectors.slice().sort((a,b)=>a.avgEfficiency-b.avgEfficiency);
-    var effR = {};
-    for (var e = 0; e < byEff.length; e++) { if (e > 0 && byEff[e].avgEfficiency === byEff[e-1].avgEfficiency) effR[byEff[e].inspector] = effR[byEff[e-1].inspector]; else effR[byEff[e].inspector] = e + 1; }
-    for (var k = 0; k < inspectors.length; k++) { inspectors[k].intervalRank = intR[inspectors[k].inspector]; inspectors[k].effRank = effR[inspectors[k].inspector]; }
+    // 总间隔排名(升序,平均小的排前面)
+    var byGap = inspectors.slice().sort((a,b)=>a.avgTotalGap-b.avgTotalGap);
+    var gapR = {};
+    for (var e = 0; e < byGap.length; e++) { if (e > 0 && byGap[e].avgTotalGap === byGap[e-1].avgTotalGap) gapR[byGap[e].inspector] = gapR[byGap[e-1].inspector]; else gapR[byGap[e].inspector] = e + 1; }
+    for (var k = 0; k < inspectors.length; k++) { inspectors[k].intervalRank = intR[inspectors[k].inspector]; inspectors[k].gapRank = gapR[inspectors[k].inspector]; }
   }
 
   var dailyData = filterByTime(items, yesterdayStart, todayStart);
@@ -320,7 +319,7 @@ async function computeLocalRank() {
 }
 const RANK_TABLE_FIELDS = [
   {"field_name":"质检数","type":1}, {"field_name":"平均时效","type":1},
-  {"field_name":"总间隔","type":1},
+  {"field_name":"间隔时间","type":1}, {"field_name":"总间隔","type":1},
   {"field_name":"全检","type":1}, {"field_name":"SKU","type":1},
   {"field_name":"功能","type":1}, {"field_name":"拆修","type":1},
   {"field_name":"外观","type":1}
@@ -371,9 +370,10 @@ async function writeRankTable(token, tblId, label, inspectors) {
   if (!inspectors.length) return;
 
   var categories = [
-    { field: '质检数', sort: function(a,b){ return b.count - a.count; }, format: function(p){ return p.inspector + ' ' + p.count; } },
-    { field: '平均时效', sort: function(a,b){ return a.avgEfficiency - b.avgEfficiency; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgEfficiency); } },
-    { field: '总间隔', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
+    { field: '质检数', sort: function(a,b){ return b.count - a.count; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + p.count; } },
+    { field: '平均时效', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
+    { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
+    { field: '总间隔', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
     { field: '全检', stepKey: 'qj' },
     { field: 'SKU', stepKey: 'sku' },
     { field: '功能', stepKey: 'gn' },
