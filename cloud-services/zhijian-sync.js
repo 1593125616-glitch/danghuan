@@ -210,8 +210,8 @@ async function clearRankTable(token, tblId) {
   }
   if (!items.length) return;
   console.log('[排名] 清空表', tblId, items.length, '条记录');
-  for (var i = 0; i < items.length; i += 500) {
-    try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records`, { records: items.slice(i, i + 500) }); } catch(e) { console.error('[排名] 清空表异常:', e.message); }
+  for (var i = 0; i < items.length; i++) {
+    try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/${items[i]}`); } catch(e) { console.error('[排名] 清空表异常:', e.message); break; }
   }
 }
 
