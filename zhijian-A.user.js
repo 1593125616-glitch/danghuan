@@ -265,7 +265,8 @@
             '#'+PANEL_ID+'.fold .rr{display:none;}'+
             '#'+PANEL_ID+'.fold .rs2{display:none;}'+
             '#'+PANEL_ID+'.fold .rh_fold{display:block;}'+
-            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;font-size:11px;}';
+            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;font-size:11px;}'+
+            '#'+PANEL_ID+' .rh_top{color:#666;font-size:10px;}';
             document.head.appendChild(s);
         }
         var el = document.getElementById(PANEL_ID);
@@ -300,22 +301,38 @@
         var maxRows = 0;
         for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
 
-        var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
-        html += '<div class="rh_fold">'+(self?stepStr(self):'')+'</div>';
+        var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+        // 折叠态: 今日+昨日自己+昨日第1
+        html += '<div class="rh_fold">';
+        html += '<span class="rh_top">今日: '+(self?stepStr(self):'')+'</span><br>';
+        html += '<span class="rh_top">昨日: '+(self?stepStr(self):'')+'</span><br>';
+        if (maxRows > 0) {
+            var r1 = '';
+            for (var c1 = 0; c1 < stepLabels.length; c1++) {
+                var f1 = stepRanks[stepLabels[c1]][0];
+                r1 += (f1 ? f1.inspector+' '+(f1[stepLabels[c1]]||0) : '-') + (c1<stepLabels.length-1?' ':'');
+            }
+            html += '<span class="rh_top">1: '+r1+'</span>';
+        }
+        html += '</div>';
+
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
-        if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
+        if (self) {
+            html += '<div class="rr"><span class="rk">自己</span><span class="rn">';
+            for (var c2 = 0; c2 < stepLabels.length; c2++) {
+                html += self.inspector+' '+(self[stepLabels[c2]]||0);
+                if (c2 < stepLabels.length - 1) html += ' ';
+            }
+            html += '</span></div>';
+        }
 
         for (var r = 0; r < maxRows; r++) {
             html += '<div class="rr"><span class="rk">'+(r+1)+'</span><span class="rn">';
             for (var c = 0; c < stepLabels.length; c++) {
                 var p2 = stepRanks[stepLabels[c]][r];
-                if (p2) {
-                    html += p2.inspector+' '+(p2[stepLabels[c]]||0);
-                } else {
-                    html += '-';
-                }
-                if (c < stepLabels.length - 1) html += '&nbsp;&nbsp;&nbsp;';
+                html += (p2 ? p2.inspector+' '+(p2[stepLabels[c]]||0) : '-');
+                if (c < stepLabels.length - 1) html += ' ';
             }
             html += '</span></div>';
         }
