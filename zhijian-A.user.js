@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.20
+// @version      3.0
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -251,20 +251,21 @@
         var PANEL_ID = 'qc_rank_panel';
         if (!document.getElementById('qc_rank_style')) {
             var s = document.createElement('style'); s.id = 'qc_rank_style';
-            s.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:200px;}'+
+            s.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:220px;max-height:80vh;overflow-y:auto;}'+
             '#'+PANEL_ID+' .rh{padding:6px 10px;background:#007aff;color:#fff;border-radius:8px 8px 0 0;font-weight:bold;cursor:move;display:flex;justify-content:space-between;}'+
             '#'+PANEL_ID+' .rcb{font-size:11px;cursor:pointer;}'+
             '#'+PANEL_ID+' .rb{padding:4px 0;}'+
             '#'+PANEL_ID+' .rs{padding:2px 10px;font-weight:bold;color:#999;font-size:11px;border-bottom:1px solid #eee;}'+
-            '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:3px 10px;border-bottom:1px solid #f5f5f5;}'+
-            '#'+PANEL_ID+' .rk{min-width:30px;font-weight:bold;text-align:left;}'+
-            '#'+PANEL_ID+' .rn{flex:1;text-align:left;font-size:12px;}'+
+            '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:2px 10px;border-bottom:1px solid #f5f5f5;font-size:11px;}'+
+            '#'+PANEL_ID+' .rk{min-width:24px;font-weight:bold;text-align:left;}'+
+            '#'+PANEL_ID+' .rn{flex:1;}'+
+            '#'+PANEL_ID+' .rs2{font-size:10px;color:#666;padding:1px 10px;}'+
             '#'+PANEL_ID+'.fold .rb{display:none;}'+
             '#'+PANEL_ID+'.fold .rs{display:none;}'+
             '#'+PANEL_ID+'.fold .rr{display:none;}'+
+            '#'+PANEL_ID+'.fold .rs2{display:none;}'+
             '#'+PANEL_ID+'.fold .rh_fold{display:block;}'+
-            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;}'+
-            '#'+PANEL_ID+' .rh_top{color:#666;font-size:11px;}';
+            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;font-size:11px;}';
             document.head.appendChild(s);
         }
         var el = document.getElementById(PANEL_ID);
@@ -275,24 +276,62 @@
         document.onmousemove = function(e){ if(dragging){el.style.left=(e.clientX-ox)+'px';el.style.top=(e.clientY-oy)+'px';el.style.right='auto';}};
         document.onmouseup = function(){ dragging=false; };
 
-        var allList = data.inspectors || [];
+        var inspectors = data.inspectors || [];
         var sites = data.sites || {};
-        var lgList = sites[mySite] || [];
 
-        function byCount(a,b){ return b.count - a.count; }
-        var countRank = lgList.slice().sort(byCount);
-
+        // 找自己
         var self = null;
-        for (var ti = 0; ti < countRank.length; ti++) { if (countRank[ti].inspector === myName) { self = countRank[ti]; break; } }
+        for (var i = 0; i < inspectors.length; i++) { if (inspectors[i].inspector === myName) { self = inspectors[i]; break; } }
+
+        function stepStr(s) {
+            return '全检'+(s.qj||0)+'台 sku'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
+        }
 
         var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
         html += '<div class="rh_fold">展开排名</div>';
+
+        // 今日自己
+        if (self) {
+            html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
+        }
+
+        // 昨日排名
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
-        for (var i = 0; i < countRank.length; i++) {
-            var cr = countRank[i];
-            html += '<div class="rr"><span class="rk">' + (i+1) + '</span><span class="rn">' + cr.inspector + ' ' + cr.count + '</span></div>';
+        if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
+
+        // 龙岗: 最多10人
+        var lgList = (sites[mySite] || []).slice(0, 10);
+        if (lgList.length) {
+            html += '<div class="rs">'+mySite+'</div>';
+            for (var j = 0; j < lgList.length; j++) {
+                var p = lgList[j];
+                html += '<div class="rr"><span class="rk">'+(j+1)+'</span><span class="rn">'+p.inspector+' '+p.count+'台</span></div>';
+            }
         }
+
+        // 其他站点: 沙井取前3, 其余各取前2, 共取9人
+        var otherList = [];
+        var seen = {};
+        for (var sk in sites) {
+            if (sk === mySite) continue;
+            var limit = sk.indexOf('沙井') >= 0 ? 3 : 2;
+            var siteList = sites[sk] || [];
+            for (var si = 0; si < Math.min(siteList.length, limit); si++) {
+                if (!seen[siteList[si].inspector]) { otherList.push(siteList[si]); seen[siteList[si].inspector] = true; }
+            }
+        }
+        otherList.sort(function(a,b){return b.count-a.count;});
+        otherList = otherList.slice(0, 9);
+
+        if (otherList.length) {
+            html += '<div class="rs">其他站点</div>';
+            for (var k = 0; k < otherList.length; k++) {
+                var o = otherList[k];
+                html += '<div class="rr"><span class="rk">'+(k+1)+'</span><span class="rn">'+o.inspector+' '+o.count+'台</span></div>';
+            }
+        }
+
         html += '</div>';
         el.innerHTML = html;
         if (GM_getValue('qc_rank_fold', false)) el.classList.add('fold');
@@ -305,7 +344,6 @@
     }
 
     function fetchRank() {
-        // 只对潘瑶显示
         var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
         if (!/潘瑶|pan.*yao/i.test(myName)) return;
         GM_xmlhttpRequest({
@@ -324,11 +362,11 @@
             }
         });
     }
-    // 整点更新(8-23点)
+    // 整点更新(8-24点)
     function scheduleNextFetch(){
         var now=new Date();
         var h=now.getHours();
-        if(h<8||h>=23)return;
+        if(h<8||h>=24)return;
         var next=new Date(now);
         next.setHours(h+1,0,0,0);
         var delay=next-now;
