@@ -284,13 +284,16 @@ async function computeLocalRank() {
 
       // 总间隔平均 = sum / (count-1), 取第2台开始算
       var avgTotalGap = validCount > 1 ? Math.round(totalGapSum / (validCount - 1) / 1000) : 0;
+      // 平均时效 = intervalSum / (count-1)
+      var avgInterval = validCount > 1 ? Math.round(intervalSum / (validCount - 1) / 1000) : 0;
 
       result.push({
         inspector: name,
         site: ug.site,
         count: validCount,
-        totalInterval: Math.round(intervalSum / 1000),   // 间隔时间(秒)
-        avgTotalGap: avgTotalGap,                          // 总间隔平均(秒)
+        totalInterval: Math.round(intervalSum / 1000),   // 间隔时间累计(秒)
+        avgInterval: avgInterval,                           // 平均时效(秒)
+        avgTotalGap: avgTotalGap,                          // 平均每台(秒)
         steps: { qj: stepCounts.qj, sku: stepCounts.sku, gn: stepCounts.gn, cx: stepCounts.cx, wg: stepCounts.wg },
         stepInt: { qj: Math.round(stepInterval.qj/1000), sku: Math.round(stepInterval.sku/1000), gn: Math.round(stepInterval.gn/1000), cx: Math.round(stepInterval.cx/1000), wg: Math.round(stepInterval.wg/1000) }
       });
@@ -375,7 +378,7 @@ async function writeRankTable(token, tblId, label, inspectors) {
 
   var categories = [
     { field: '质检数', sort: function(a,b){ return b.count - a.count; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + p.count; } },
-    { field: '平均时效', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
+    { field: '平均时效', sort: function(a,b){ return a.avgInterval - b.avgInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgInterval); } },
     { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
     { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
     { field: '全检', stepKey: 'qj' },
