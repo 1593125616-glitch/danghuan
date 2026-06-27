@@ -8,6 +8,10 @@
 // @match        http://yihuan.oppoer.me/static/*
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      cdn.jsdelivr.net
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -100,4 +104,34 @@
         document.body.appendChild(btn);
     }
     console.log('[复检] 脚本已加载');
+
+    // ========== 自动检测更新(每6小时) ==========
+    var FJ_CK_KEY = 'fj_last_update_check';
+    var FJ_CK_INTERVAL = 6 * 60 * 60 * 1000;
+    var FJ_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js';
+
+    function isNewerVer(remote, current) {
+        var r = remote.split('.').map(Number), c = current.split('.').map(Number);
+        for (var i = 0; i < Math.max(r.length, c.length); i++) { if ((r[i]||0) > (c[i]||0)) return true; if ((r[i]||0) < (c[i]||0)) return false; }
+        return false;
+    }
+
+    function checkUpdate() {
+        if (Date.now() - GM_getValue(FJ_CK_KEY, 0) < FJ_CK_INTERVAL) return;
+        GM_xmlhttpRequest({
+            method: 'GET', url: FJ_URL,
+            onload: function(resp) {
+                var m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) return;
+                if (isNewerVer(m[1], GM_info.script.version)) {
+                    console.warn('[复检] 发现新版本', m[1], '当前', GM_info.script.version);
+                    if (confirm('复检脚本发现新版本 ' + m[1] + '，是否前往更新？')) window.location.href = FJ_URL;
+                } else {
+                    GM_setValue(FJ_CK_KEY, Date.now());
+                }
+            }
+        });
+    }
+    checkUpdate();
+    setInterval(checkUpdate, FJ_CK_INTERVAL);
 })();
