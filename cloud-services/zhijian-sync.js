@@ -14,8 +14,7 @@ const TABLE_FIELDS = [
   {"field_name":"分步质检","type":1}
 ];
 
-// 缓存: 同用户的上一条 createdAt 用于计算间隔
-let prevCache = {};
+// 缓存: 用于180天清理标记
 let lastCleanup = '';
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -102,13 +101,9 @@ async function syncData() {
       var submitTime = parseSubmitTime(rec);
       if (written < 3) console.log('[质检B] 记录', written, 'createdAt_raw:', JSON.stringify(rec.createdAt), 'submitTime:', submitTime, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
-      var ck = user.inspector ? (user.site || '') + '-' + user.inspector : '';
-      var interval = '', efficiency = '';
-      if (ck && prevCache[ck]) {
-        if (prevCache[ck] && createdAt > prevCache[ck]) efficiency = fmtDiff(createdAt - prevCache[ck]);
-        if (prevCache[ck] && submitTime > prevCache[ck]) interval = fmtDiff(submitTime - prevCache[ck]);
-      }
-      prevCache[ck] = createdAt;
+      // 直接用云函数预计算的间隔/时效(不依赖本地缓存)
+      var interval = (typeof rec._interval === 'number' && rec._interval > 0) ? fmtDiff(rec._interval) : '';
+      var efficiency = (typeof rec._efficiency === 'number' && rec._efficiency > 0) ? fmtDiff(rec._efficiency) : '';
 
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
