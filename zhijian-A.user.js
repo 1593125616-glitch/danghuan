@@ -300,27 +300,24 @@
         var maxRows = 0;
         for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
 
-        var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+        var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
         html += '<div class="rh_fold">'+(self?stepStr(self):'')+'</div>';
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
         if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
-        // 表头
-        html += '<div class="rr"><span class="rk"></span>';
-        for (var sh = 0; sh < stepNames.length; sh++) { html += '<span class="rn" style="font-weight:bold">'+stepNames[sh]+'</span>'; }
-        html += '</div>';
 
         for (var r = 0; r < maxRows; r++) {
-            html += '<div class="rr"><span class="rk">'+(r+1)+'</span>';
+            html += '<div class="rr"><span class="rk">'+(r+1)+'</span><span class="rn">';
             for (var c = 0; c < stepLabels.length; c++) {
                 var p2 = stepRanks[stepLabels[c]][r];
                 if (p2) {
-                    html += '<span class="rn">'+p2.inspector+' '+p2[stepLabels[c]]+'台</span>';
+                    html += p2.inspector+' '+(p2[stepLabels[c]]||0);
                 } else {
-                    html += '<span class="rn">-</span>';
+                    html += '-';
                 }
+                if (c < stepLabels.length - 1) html += '&nbsp;&nbsp;&nbsp;';
             }
-            html += '</div>';
+            html += '</span></div>';
         }
         html += '</div>';
         el.innerHTML = html;
