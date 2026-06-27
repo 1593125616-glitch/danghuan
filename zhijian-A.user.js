@@ -278,39 +278,50 @@
 
         var inspectors = data.inspectors || [];
         var sites = data.sites || {};
+        var stepLabels = ['qj','sku','gn','cx','wg'];
+        var stepNames = ['全检','SKU','功能','拆修','外观'];
+
+        // 每类步骤各取前N人组成5列排名
+        var stepRanks = {};
+        for (var si = 0; si < stepLabels.length; si++) {
+            var key = stepLabels[si];
+            var sorted = inspectors.slice().sort(function(a,b){ return (b[key]||0) - (a[key]||0); });
+            stepRanks[key] = sorted;
+        }
 
         // 找自己
         var self = null;
         for (var i = 0; i < inspectors.length; i++) { if (inspectors[i].inspector === myName) { self = inspectors[i]; break; } }
 
         function stepStr(s) {
-            return '全检'+(s.qj||0)+'台 sku'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
+            return '全检'+(s.qj||0)+'台 SKU'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
         }
+
+        var maxRows = 0;
+        for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
 
         var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
         html += '<div class="rh_fold">'+(self?stepStr(self):'')+'</div>';
-
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
         if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
+        // 表头
+        html += '<div class="rr"><span class="rk"></span>';
+        for (var sh = 0; sh < stepNames.length; sh++) { html += '<span class="rn" style="font-weight:bold">'+stepNames[sh]+'</span>'; }
+        html += '</div>';
 
-        // 龙岗: 最多10人 (从sites取)
-        var lgList = (sites[mySite] || []).slice(0, 10);
-        for (var j = 0; j < lgList.length; j++) {
-            var p = lgList[j];
-            html += '<div class="rr"><span class="rk">'+(j+1)+'</span><span class="rn">'+p.inspector+' '+p.count+'台</span></div>';
-        }
-
-        // 跨站点综合排名: 每种步骤取各自站点前N,组成总排名
-        var crList = data.crossRank || [];
-        if (crList.length) {
-            html += '<div class="rs">综合排名</div>';
-            for (var ci = 0; ci < crList.length; ci++) {
-                var cr2 = crList[ci];
-                html += '<div class="rr"><span class="rk">'+(ci+1)+'</span><span class="rn">'+cr2.inspector+' '+cr2.count+'台</span></div>';
+        for (var r = 0; r < maxRows; r++) {
+            html += '<div class="rr"><span class="rk">'+(r+1)+'</span>';
+            for (var c = 0; c < stepLabels.length; c++) {
+                var p2 = stepRanks[stepLabels[c]][r];
+                if (p2) {
+                    html += '<span class="rn">'+p2.inspector+' '+p2[stepLabels[c]]+'台</span>';
+                } else {
+                    html += '<span class="rn">-</span>';
+                }
             }
+            html += '</div>';
         }
-
         html += '</div>';
         el.innerHTML = html;
         if (GM_getValue('qc_rank_fold', false)) el.classList.add('fold');
