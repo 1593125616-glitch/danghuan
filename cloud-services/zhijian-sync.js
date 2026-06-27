@@ -323,7 +323,7 @@ async function computeLocalRank() {
 }
 const RANK_TABLE_FIELDS = [
   {"field_name":"质检数","type":1}, {"field_name":"平均时效","type":1},
-  {"field_name":"间隔时间","type":1}, {"field_name":"总间隔","type":1},
+  {"field_name":"间隔时间","type":1}, {"field_name":"平均每台","type":1},
   {"field_name":"全检","type":1}, {"field_name":"SKU","type":1},
   {"field_name":"功能","type":1}, {"field_name":"拆修","type":1},
   {"field_name":"外观","type":1}
@@ -377,7 +377,7 @@ async function writeRankTable(token, tblId, label, inspectors) {
     { field: '质检数', sort: function(a,b){ return b.count - a.count; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + p.count; } },
     { field: '平均时效', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
     { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
-    { field: '总间隔', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
+    { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
     { field: '全检', stepKey: 'qj' },
     { field: 'SKU', stepKey: 'sku' },
     { field: '功能', stepKey: 'gn' },
