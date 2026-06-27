@@ -10,8 +10,8 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @connect      cdn.jsdelivr.net
-// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/fujian.tag.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/fujian.tag.user.js
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -108,7 +108,7 @@
     // ========== 自动检测更新(每6小时) ==========
     var FJ_CK_KEY = 'fj_last_update_check';
     var FJ_CK_INTERVAL = 6 * 60 * 60 * 1000;
-    var FJ_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/fujian.user.js';
+    var FJ_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan/fujian.tag.user.js';
 
     function isNewerVer(remote, current) {
         var r = remote.split('.').map(Number), c = current.split('.').map(Number);

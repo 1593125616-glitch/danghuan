@@ -2770,10 +2770,8 @@
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
-                    console.warn(`[质检] 发现新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
-                    if (confirm(`功能脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
-                        window.location.href = SUK_URL;
-                    }
+                    console.warn('[质检] 发现新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
+                    window.location.href = SUK_URL;
                 } else {
                     markDone(SUK_CK_KEY);
                 }

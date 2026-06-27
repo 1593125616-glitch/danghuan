@@ -292,8 +292,10 @@
         }
 
         // 找自己
-        var self = null;
+        var self = null, selfToday = null;
         for (var i = 0; i < inspectors.length; i++) { if (inspectors[i].inspector === myName) { self = inspectors[i]; break; } }
+        var todayList = data.today || [];
+        for (var j = 0; j < todayList.length; j++) { if (todayList[j].inspector === myName) { selfToday = todayList[j]; break; } }
 
         function stepStr(s) {
             return '全检'+(s.qj||0)+'台 SKU'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
@@ -302,7 +304,7 @@
         var maxRows = 0;
         for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
 
-        var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+        var html = '<div class="rh" title="拖动移动"><span>'+(selfToday?stepStr(selfToday):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
         // 折叠态: 昨日自己+昨日第1(今日在标题已显示)
         html += '<div class="rh_fold">';
         html += '<span class="rh_top">昨日: '+(self?stepStr(self):'')+'</span><br>';
@@ -386,10 +388,8 @@
                 const m = resp.responseText.match(/@version\s+(\S+)/);
                 if (!m) return;
                 if (isNewerVer(m[1], GM_info.script.version)) {
-                    console.warn(`[质检A] 发现新版本 ${m[1]}（当前 ${GM_info.script.version}）`);
-                    if (confirm(`质检A脚本发现新版本 ${m[1]}（当前 ${GM_info.script.version}），是否前往更新？`)) {
-                        window.location.href = A_URL;
-                    }
+                    console.warn('[质检A] 发现新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
+                    window.location.href = A_URL;
                 } else {
                     markDone(A_CK_KEY);
                 }
