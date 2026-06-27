@@ -99,7 +99,7 @@ async function syncData() {
       var user = parseUserName(rec.userName);
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
-      if (written < 3) console.log('[质检B] 记录', written, 'createdAt_raw:', JSON.stringify(rec.createdAt), 'submitTime:', submitTime, 'user:', user.inspector);
+      if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, '_interval:', rec._interval, '_efficiency:', rec._efficiency, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
       // 直接用云函数预计算的间隔/时效(不依赖本地缓存)
       var interval = (typeof rec._interval === 'number' && rec._interval > 0) ? fmtDiff(rec._interval) : '';
