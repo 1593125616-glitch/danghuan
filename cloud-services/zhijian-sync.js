@@ -241,57 +241,55 @@ async function computeLocalRank() {
       var ug = userMap[name];
       ug.records.sort(function(a, b) { return getAt(a) - getAt(b); });
       var siteMaxGap = /深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000;
-      var allTime = 0, allInterval = 0, validCount = 0, noStepCount = 0, noStepTime = 0;
-      var stepMap = {};
-      for (var steps of ['step1', 'step2', 'step3', 'step4']) stepMap[steps] = { count: 0, inspTime: 0, interval: 0 };
+      // 间隔时效: sum of all (submitTime - prevCreatedAt), 不剔除长间隔
+      var allIntervalSum = 0, allEfficiencySum = 0, validCount = 0;
+      // 分步计数: qj(1/1), sku(1/4), gn(2/4), cx(3/4), wg(4/4)
+      var stepCounts = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
+      // Per-step interval (for step-based ranking)
+      var stepInterval = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
+      var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 }; // inspection time per step
 
       for (var j = 0; j < ug.records.length; j++) {
         var rec = ug.records[j];
         var ct = getAt(rec), st = getSt(rec);
-        if (!ct || !st || ct <= st) continue;
+        if (!ct || !st) continue;
         validCount++;
         var insp = ct - st;
-        allTime += insp;
         var step = rec.step || '';
-        var m = step.match(/(\d+)\/(\d+)/);
-        var stepType = 'noStep';
-        if (m && parseInt(m[2]) > 1) {
-          var num = parseInt(m[1]);
-          if (num === 1) stepType = 'step1';
-          else if (num === 2) stepType = 'step2';
-          else if (num === 3) stepType = 'step3';
-          else if (num === 4) stepType = 'step4';
+        var m2 = step.match(/(\d+)\/(\d+)/);
+        var sk = 'qj';
+        if (m2 && parseInt(m2[2]) === 4) {
+          if (m2[1] === '1') sk = 'sku';
+          else if (m2[1] === '2') sk = 'gn';
+          else if (m2[1] === '3') sk = 'cx';
+          else if (m2[1] === '4') sk = 'wg';
         }
-        if (stepType === 'noStep') { noStepCount++; noStepTime += insp; }
-        else if (stepMap[stepType]) { stepMap[stepType].count++; stepMap[stepType].inspTime += insp; }
+        stepCounts[sk]++;
+        stepTime[sk] += insp;
 
         if (j > 0) {
           var prevAt = getAt(ug.records[j - 1]);
           var gap = st - prevAt;
           if (gap > 0 && gap < siteMaxGap) {
-            allInterval += gap;
-            if (stepType !== 'noStep' && stepMap[stepType]) stepMap[stepType].interval += gap;
+            allIntervalSum += gap;
+            stepInterval[sk] += gap;
           }
+          var effGap = ct - prevAt;
+          if (effGap > 0) allEfficiencySum += effGap;
         }
       }
 
-      var stepGroups = {};
-      for (var sk of ['step1', 'step2', 'step3', 'step4']) {
-        var g = stepMap[sk];
-        stepGroups[sk] = {
-          count: g.count,
-          avgInspTime: g.count > 0 ? Math.round(g.inspTime / g.count / 1000) : 0,
-          totalInterval: Math.round(g.interval / 1000)
-        };
-      }
+      var avgEfficiency = validCount > 1 ? Math.round(allEfficiencySum / (validCount - 1) / 1000) : 0;
 
       result.push({
         inspector: name,
         site: ug.site,
         count: validCount,
-        avgTime: noStepCount > 0 ? Math.round(noStepTime / noStepCount / 1000) : 0,
-        totalInterval: Math.round(allInterval / 1000),
-        stepGroups: stepGroups
+        totalInterval: Math.round(allIntervalSum / 1000),
+        avgEfficiency: avgEfficiency,
+        steps: { qj: stepCounts.qj, sku: stepCounts.sku, gn: stepCounts.gn, cx: stepCounts.cx, wg: stepCounts.wg },
+        // Per-step interval in seconds
+        stepInt: { qj: Math.round(stepInterval.qj/1000), sku: Math.round(stepInterval.sku/1000), gn: Math.round(stepInterval.gn/1000), cx: Math.round(stepInterval.cx/1000), wg: Math.round(stepInterval.wg/1000) }
       });
     }
     return result;
@@ -299,13 +297,15 @@ async function computeLocalRank() {
 
   function applyRanks(inspectors) {
     if (!inspectors.length) return;
-    // 时效排名(升序)
-    var byInsp = inspectors.slice().sort((a,b)=>a.avgTime-b.avgTime);
-    var inspR = {}; for (var i = 0; i < byInsp.length; i++) { if (i > 0 && byInsp[i].avgTime === byInsp[i-1].avgTime) inspR[byInsp[i].inspector] = inspR[byInsp[i-1].inspector]; else inspR[byInsp[i].inspector] = i + 1; }
     // 间隔排名(降序)
     var byInt = inspectors.slice().sort((a,b)=>b.totalInterval-a.totalInterval);
-    var intR = {}; for (var j = 0; j < byInt.length; j++) { if (j > 0 && byInt[j].totalInterval === byInt[j-1].totalInterval) intR[byInt[j].inspector] = intR[byInt[j-1].inspector]; else intR[byInt[j].inspector] = j + 1; }
-    for (var k = 0; k < inspectors.length; k++) { inspectors[k].inspRank = inspR[inspectors[k].inspector]; inspectors[k].intervalRank = intR[inspectors[k].inspector]; }
+    var intR = {};
+    for (var j = 0; j < byInt.length; j++) { if (j > 0 && byInt[j].totalInterval === byInt[j-1].totalInterval) intR[byInt[j].inspector] = intR[byInt[j-1].inspector]; else intR[byInt[j].inspector] = j + 1; }
+    // 平均效率排名(升序)
+    var byEff = inspectors.slice().sort((a,b)=>a.avgEfficiency-b.avgEfficiency);
+    var effR = {};
+    for (var e = 0; e < byEff.length; e++) { if (e > 0 && byEff[e].avgEfficiency === byEff[e-1].avgEfficiency) effR[byEff[e].inspector] = effR[byEff[e-1].inspector]; else effR[byEff[e].inspector] = e + 1; }
+    for (var k = 0; k < inspectors.length; k++) { inspectors[k].intervalRank = intR[inspectors[k].inspector]; inspectors[k].effRank = effR[inspectors[k].inspector]; }
   }
 
   var dailyData = filterByTime(items, yesterdayStart, todayStart);
@@ -366,30 +366,60 @@ async function clearRankTable(token, tblId) {
 
 function formatInspectors(inspectors) { return (inspectors||[]).slice().sort((a,b)=>b.count-a.count); }
 
-function getStepText(s, stepKey) {
-  var g = s.stepGroups && s.stepGroups[stepKey];
-  if (!g || !g.count) return '';
-  var rank = (s.stepRanks && s.stepRanks[stepKey]) ? s.stepRanks[stepKey].inspRank : 0;
-  return (s.site||'') + s.inspector + ' 排名' + rank + ' ' + fmtSec(g.avgInspTime);
-}
-
+// 5列步骤排名(像质检A): 每行显示各步骤的第N名
 async function writeRankTable(token, tblId, label, inspectors) {
   var sorted = formatInspectors(inspectors);
   if (!sorted.length) return;
+
+  var stepKeys = ['qj','sku','gn','cx','wg'];
+  var stepLabels = ['全检','SKU','功能','拆修','外观'];
+
+  // Build per-step sorted lists
+  var stepSorted = {};
+  for (var sk of stepKeys) {
+    stepSorted[sk] = inspectors.slice().sort(function(a,b){
+      return (b.steps&&b.steps[sk]?b.steps[sk]:0) - (a.steps&&a.steps[sk]?a.steps[sk]:0);
+    });
+  }
+
+  var maxRows = 0;
+  for (var sk2 of stepKeys) { maxRows = Math.max(maxRows, stepSorted[sk2].length); }
+
   var records = [];
-  for (var i = 0; i < sorted.length; i++) {
-    var s = sorted[i];
+  for (var r = 0; r < maxRows; r++) {
     var fields = {};
     fields['统计时间'] = label;
-    fields['质检数'] = (s.site||'') + s.inspector + ' ' + s.count + '台';
-    fields['时效排名'] = (s.inspRank||'') + ' ' + fmtSec(s.avgTime);
-    fields['平均时效'] = (s.site||'') + s.inspector + ' ' + fmtSec(s.avgTime);
-    fields['间隔排名'] = (s.intervalRank||'') + ' ' + fmtSec(s.totalInterval);
-    fields['总间隔'] = (s.site||'') + s.inspector + ' ' + fmtSec(s.totalInterval);
-    fields['第一步'] = getStepText(s, 'step1');
-    fields['第二步'] = getStepText(s, 'step2');
-    fields['第三步'] = getStepText(s, 'step3');
-    fields['第四步'] = getStepText(s, 'step4');
+    var parts = [];
+    for (var c = 0; c < stepKeys.length; c++) {
+      var key = stepKeys[c];
+      var p = stepSorted[key][r];
+      if (p) parts.push(p.inspector + ' ' + (p.steps?p.steps[key]:0));
+    }
+    fields['质检数'] = parts.join('  ');
+    // 每个人也单独一行
+    fields['第一步'] = '';
+    fields['第二步'] = '';
+    fields['第三步'] = '';
+    fields['第四步'] = '';
+    fields['时效排名'] = '';
+    fields['平均时效'] = '';
+    fields['间隔排名'] = '';
+    fields['总间隔'] = '';
+
+    for (var c2 = 0; c2 < stepKeys.length; c2++) {
+      var key2 = stepKeys[c2];
+      var p2 = stepSorted[key2][r];
+      if (p2) {
+        var colName = stepLabels[c2];
+        if (colName === '全检') fields['第一步'] = p2.inspector + ' ' + (p2.steps?p2.steps[key2]:0);
+        else if (colName === 'SKU') fields['第二步'] = p2.inspector + ' ' + (p2.steps?p2.steps[key2]:0);
+        else if (colName === '功能') fields['第三步'] = p2.inspector + ' ' + (p2.steps?p2.steps[key2]:0);
+        else if (colName === '拆修') fields['第四步'] = p2.inspector + ' ' + (p2.steps?p2.steps[key2]:0);
+        else fields['时效排名'] = p2.inspector + ' ' + (p2.steps?p2.steps[key2]:0);
+        break;
+      }
+    }
+
     records.push({ fields: fields });
     if (records.length >= 500) {
       await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: records });
@@ -399,7 +429,7 @@ async function writeRankTable(token, tblId, label, inspectors) {
   if (records.length) {
     await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: records });
   }
-  console.log('[排名] 已写入:', label, sorted.length, '人');
+  console.log('[排名] 已写入:', label, maxRows, '行');
 }
 
 async function cleanupOldRankTables(token) {
