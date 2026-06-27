@@ -151,7 +151,7 @@ function shouldRun() {
 
 async function loop() {
   var h = new Date().getHours();
-  if (h >= 8 && h < 12) {
+  if (h >= 8 && h < 24) {
     console.log('[质检B] 开始同步...');
     await syncData();
     var today = new Date().toDateString();
