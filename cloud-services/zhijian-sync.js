@@ -320,7 +320,7 @@ async function computeLocalRank() {
 
   // daily用龙岗1.5h/其他2h, weekly/monthly用5h剔除休息时间
   var dailyMaxGap = 7200000;
-  var longMaxGap = 18000000; // 5小时
+  var longMaxGap = 10800000; // 3小时
 
   return {
     daily: { inspectors: calcStats(dailyData, 0) },
