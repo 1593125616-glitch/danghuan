@@ -244,10 +244,20 @@ async function computeLocalRank() {
     for (var name in userMap) {
       var ug = userMap[name];
       ug.records.sort(function(a, b) { return getAt(a) - getAt(b); });
-      var siteMaxGap = maxGap > 0 ? maxGap : (/深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000);
-      var intervalSum = 0;    // 间隔时间: sum of (submitTime - prevCreatedAt) with filter
-      var totalGapSum = 0;    // 总间隔: sum of (createdAt - prevCreatedAt) no filter
-      var validCount = 0;
+      var siteSmallGap = /深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000;
+      var smallGap = 5400000; // 龙岗1.5h/其他2h通用
+      var bigGap = maxGap > 0 ? maxGap : siteSmallGap;
+
+      // 检测每天是否上班(>10台当天)
+      var dayCount = {};
+      for (var d = 0; d < ug.records.length; d++) {
+        var dt = getAt(ug.records[d]);
+        if (!dt) continue;
+        var dk = new Date(dt).toDateString();
+        dayCount[dk] = (dayCount[dk] || 0) + 1;
+      }
+
+      var intervalSum = 0, totalGapSum = 0, validCount = 0;
       var stepCounts = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepInterval = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
@@ -270,13 +280,15 @@ async function computeLocalRank() {
 
         if (j > 0) {
           var prevAt = getAt(ug.records[j - 1]);
-          // 间隔时间: submitTime - prevCreatedAt, 剔除长间隔
+          var prevDay = new Date(prevAt).toDateString();
+          var curDay = new Date(ct).toDateString();
+          // 同一上班天(>10台)用小间隙,其他用大间隙
+          var gapLimit = (prevDay === curDay && dayCount[prevDay] > 10) ? siteSmallGap : bigGap;
           var gap = st - prevAt;
-          if (gap > 0 && gap < siteMaxGap) {
+          if (gap > 0 && gap < gapLimit) {
             intervalSum += gap;
             stepInterval[sk] += gap;
           }
-          // 总间隔: createdAt - prevCreatedAt, 不剔除
           var tg = ct - prevAt;
           if (tg > 0) totalGapSum += tg;
         }
