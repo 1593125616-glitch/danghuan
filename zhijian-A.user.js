@@ -287,49 +287,18 @@
             return '全检'+(s.qj||0)+'台 sku'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
         }
 
-        var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
-        html += '<div class="rh_fold">展开排名</div>';
+        var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+        html += '<div class="rh_fold">'+(self?stepStr(self):'')+'</div>';
 
-        // 今日自己
-        if (self) {
-            html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
-        }
-
-        // 昨日排名
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
         if (self) html += '<div class="rs2">自己: '+stepStr(self)+'</div>';
 
         // 龙岗: 最多10人
         var lgList = (sites[mySite] || []).slice(0, 10);
-        if (lgList.length) {
-            html += '<div class="rs">'+mySite+'</div>';
-            for (var j = 0; j < lgList.length; j++) {
-                var p = lgList[j];
-                html += '<div class="rr"><span class="rk">'+(j+1)+'</span><span class="rn">'+p.inspector+' '+p.count+'台</span></div>';
-            }
-        }
-
-        // 其他站点: 沙井取前3, 其余各取前2, 共取9人
-        var otherList = [];
-        var seen = {};
-        for (var sk in sites) {
-            if (sk === mySite) continue;
-            var limit = sk.indexOf('沙井') >= 0 ? 3 : 2;
-            var siteList = sites[sk] || [];
-            for (var si = 0; si < Math.min(siteList.length, limit); si++) {
-                if (!seen[siteList[si].inspector]) { otherList.push(siteList[si]); seen[siteList[si].inspector] = true; }
-            }
-        }
-        otherList.sort(function(a,b){return b.count-a.count;});
-        otherList = otherList.slice(0, 9);
-
-        if (otherList.length) {
-            html += '<div class="rs">其他站点</div>';
-            for (var k = 0; k < otherList.length; k++) {
-                var o = otherList[k];
-                html += '<div class="rr"><span class="rk">'+(k+1)+'</span><span class="rn">'+o.inspector+' '+o.count+'台</span></div>';
-            }
+        for (var j = 0; j < lgList.length; j++) {
+            var p = lgList[j];
+            html += '<div class="rr"><span class="rk">'+(j+1)+'</span><span class="rn">'+p.inspector+' '+p.count+'台</span></div>';
         }
 
         html += '</div>';
