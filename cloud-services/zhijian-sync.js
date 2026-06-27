@@ -151,6 +151,7 @@ function shouldRun() {
 
 async function loop() {
   var h = new Date().getHours();
+  console.log('[质检B] 心跳 h='+h);
   if (h >= 8 && h < 24) {
     console.log('[质检B] 开始同步...');
     await syncData();
@@ -164,6 +165,7 @@ async function loop() {
 }
 
 console.log('[质检B] 云托管服务已启动');
+console.log('[质检B] 当前时间:', new Date().toString());
 loop();
 
 // ===== 排名同步 =====
