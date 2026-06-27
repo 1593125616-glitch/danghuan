@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      2.20
+// @version      3.1
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -251,20 +251,23 @@
         var PANEL_ID = 'qc_rank_panel';
         if (!document.getElementById('qc_rank_style')) {
             var s = document.createElement('style'); s.id = 'qc_rank_style';
-            s.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:200px;}'+
+            s.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:220px;max-height:80vh;overflow-y:auto;}'+
             '#'+PANEL_ID+' .rh{padding:6px 10px;background:#007aff;color:#fff;border-radius:8px 8px 0 0;font-weight:bold;cursor:move;display:flex;justify-content:space-between;}'+
             '#'+PANEL_ID+' .rcb{font-size:11px;cursor:pointer;}'+
             '#'+PANEL_ID+' .rb{padding:4px 0;}'+
             '#'+PANEL_ID+' .rs{padding:2px 10px;font-weight:bold;color:#999;font-size:11px;border-bottom:1px solid #eee;}'+
-            '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:3px 10px;border-bottom:1px solid #f5f5f5;}'+
-            '#'+PANEL_ID+' .rk{min-width:30px;font-weight:bold;text-align:left;}'+
-            '#'+PANEL_ID+' .rn{flex:1;text-align:left;font-size:12px;}'+
+            '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:2px 10px;border-bottom:1px solid #f5f5f5;font-size:11px;}'+
+            '#'+PANEL_ID+' .rk{min-width:24px;font-weight:bold;text-align:left;}'+
+            '#'+PANEL_ID+' .rn{flex:1;}'+
+            '#'+PANEL_ID+' .rs2{font-size:10px;color:#666;padding:1px 10px;}'+
             '#'+PANEL_ID+'.fold .rb{display:none;}'+
             '#'+PANEL_ID+'.fold .rs{display:none;}'+
             '#'+PANEL_ID+'.fold .rr{display:none;}'+
+            '#'+PANEL_ID+'.fold .rs2{display:none;}'+
             '#'+PANEL_ID+'.fold .rh_fold{display:block;}'+
-            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;}'+
-            '#'+PANEL_ID+' .rh_top{color:#666;font-size:11px;}';
+            '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;font-size:11px;}'+
+            '#'+PANEL_ID+' .rh_top{color:#666;font-size:10px;}'+
+            '#'+PANEL_ID+' .rc3{display:inline-block;min-width:68px;}';
             document.head.appendChild(s);
         }
         var el = document.getElementById(PANEL_ID);
@@ -275,23 +278,63 @@
         document.onmousemove = function(e){ if(dragging){el.style.left=(e.clientX-ox)+'px';el.style.top=(e.clientY-oy)+'px';el.style.right='auto';}};
         document.onmouseup = function(){ dragging=false; };
 
-        var allList = data.inspectors || [];
+        var inspectors = data.inspectors || [];
         var sites = data.sites || {};
-        var lgList = sites[mySite] || [];
+        var stepLabels = ['qj','sku','gn','cx','wg'];
+        var stepNames = ['全检','SKU','功能','拆修','外观'];
 
-        function byCount(a,b){ return b.count - a.count; }
-        var countRank = lgList.slice().sort(byCount);
+        // 每类步骤各取前N人组成5列排名
+        var stepRanks = {};
+        for (var si = 0; si < stepLabels.length; si++) {
+            var key = stepLabels[si];
+            var sorted = inspectors.slice().sort(function(a,b){ return (b[key]||0) - (a[key]||0); });
+            stepRanks[key] = sorted;
+        }
 
+        // 找自己
         var self = null;
-        for (var ti = 0; ti < countRank.length; ti++) { if (countRank[ti].inspector === myName) { self = countRank[ti]; break; } }
+        for (var i = 0; i < inspectors.length; i++) { if (inspectors[i].inspector === myName) { self = inspectors[i]; break; } }
 
-        var html = '<div class="rh" title="拖动移动"><span>今日质检数量</span><span class="rcb">折叠</span></div>';
-        html += '<div class="rh_fold">展开排名</div>';
+        function stepStr(s) {
+            return '全检'+(s.qj||0)+'台 SKU'+(s.sku||0)+'台 功能'+(s.gn||0)+'台 拆修'+(s.cx||0)+'台 外观'+(s.wg||0)+'台';
+        }
+
+        var maxRows = 0;
+        for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
+
+        var html = '<div class="rh" title="拖动移动"><span>'+(self?stepStr(self):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+        // 折叠态: 昨日自己+昨日第1(今日在标题已显示)
+        html += '<div class="rh_fold">';
+        html += '<span class="rh_top">昨日: '+(self?stepStr(self):'')+'</span><br>';
+        if (maxRows > 0) {
+            var r1 = '';
+            for (var c1 = 0; c1 < stepLabels.length; c1++) {
+                var f1 = stepRanks[stepLabels[c1]][0];
+                r1 += (f1 ? f1.inspector+' '+(f1[stepLabels[c1]]||0) : '-') + (c1<stepLabels.length-1?' ':'');
+            }
+            html += '<span class="rh_top">1: '+r1+'</span>';
+        }
+        html += '</div>';
+
         html += '<div class="rb">';
         html += '<div class="rs">昨日排名</div>';
-        for (var i = 0; i < countRank.length; i++) {
-            var cr = countRank[i];
-            html += '<div class="rr"><span class="rk">' + (i+1) + '</span><span class="rn">' + cr.inspector + ' ' + cr.count + '</span></div>';
+        if (self) {
+            html += '<div class="rr"><span class="rk">自己</span><span class="rn">';
+            html += '<span class="rc3">全检'+(self.qj||0)+'台</span>';
+            html += '<span class="rc3">SKU'+(self.sku||0)+'台</span>';
+            html += '<span class="rc3">功能'+(self.gn||0)+'台</span>';
+            html += '<span class="rc3">拆修'+(self.cx||0)+'台</span>';
+            html += '<span class="rc3">外观'+(self.wg||0)+'台</span>';
+            html += '</span></div>';
+        }
+
+        for (var r = 0; r < maxRows; r++) {
+            html += '<div class="rr"><span class="rk">'+(r+1)+'</span><span class="rn">';
+            for (var c = 0; c < stepLabels.length; c++) {
+                var p2 = stepRanks[stepLabels[c]][r];
+                html += '<span class="rc3">'+(p2 ? p2.inspector+' '+(p2[stepLabels[c]]||0) : '-')+'</span>';
+            }
+            html += '</span></div>';
         }
         html += '</div>';
         el.innerHTML = html;
@@ -305,7 +348,6 @@
     }
 
     function fetchRank() {
-        // 只对潘瑶显示
         var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
         if (!/潘瑶|pan.*yao/i.test(myName)) return;
         GM_xmlhttpRequest({
@@ -324,11 +366,11 @@
             }
         });
     }
-    // 整点更新(8-23点)
+    // 整点更新(8-24点)
     function scheduleNextFetch(){
         var now=new Date();
         var h=now.getHours();
-        if(h<8||h>=23)return;
+        if(h<8||h>=24)return;
         var next=new Date(now);
         next.setHours(h+1,0,0,0);
         var delay=next-now;
