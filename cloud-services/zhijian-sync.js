@@ -184,7 +184,11 @@ async function computeLocalRank() {
   var yesterdayStart = new Date(todayStart.getTime() - 24*60*60*1000);
   var dow = now.getDay(); if (dow === 0) dow = 7;
   var weekStart = new Date(todayStart.getTime() - (dow - 1) * 24*60*60*1000);
+  // 本周日23:59:59作为周结束
+  var weekEnd = new Date(weekStart.getTime() + 7 * 24*60*60*1000);
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // 本月最后一天
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
   function parseUser(userName) {
     if (!userName) return { name: '', site: '' };
@@ -305,8 +309,8 @@ async function computeLocalRank() {
   }
 
   var dailyData = filterByTime(items, yesterdayStart, todayStart);
-  var weeklyData = filterByTime(items, weekStart, null);
-  var monthlyData = filterByTime(items, monthStart, null);
+  var weeklyData = filterByTime(items, weekStart, weekEnd);
+  var monthlyData = filterByTime(items, monthStart, monthEnd);
 
   return {
     daily: { inspectors: calcStats(dailyData, 7200000) },
@@ -426,9 +430,10 @@ async function syncRankToFeishu() {
     var dailyLabel = '昨日排名' + (yesterday.getMonth()+1) + '.' + yesterday.getDate();
     var dow = now.getDay(); if (dow === 0) dow = 7;
     var mon = new Date(now.getTime() - (dow-1)*24*60*60*1000);
-    var sun = new Date(now);
+    var sun = new Date(mon.getTime() + 6*24*60*60*1000);
     var weeklyLabel = '本周排名' + (mon.getMonth()+1) + '.' + mon.getDate() + '-' + (sun.getMonth()+1) + '.' + sun.getDate();
-    var monthlyLabel = '本月排名' + (now.getMonth()+1) + '.1-' + (now.getMonth()+1) + '.' + now.getDate();
+    var lastDay = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    var monthlyLabel = '本月排名' + (now.getMonth()+1) + '.1-' + (now.getMonth()+1) + '.' + lastDay.getDate();
     console.log('[排名] 标签:', dailyLabel, weeklyLabel, monthlyLabel);
 
     if (rd.daily && rd.daily.inspectors && rd.daily.inspectors.length) {
