@@ -151,7 +151,7 @@ function shouldRun() {
 
 async function loop() {
   var h = new Date().getHours();
-  if (h >= 8 && h < 23) {
+  if (h >= 8 && h < 12) {
     console.log('[质检B] 开始同步...');
     await syncData();
     var today = new Date().toDateString();
@@ -160,7 +160,7 @@ async function loop() {
       try { var cr2 = await cloudPost('/cleanup', { days: 180 }); console.log('[质检B] 清理旧数据:', cr2.deleted||0, '条'); } catch(e) { console.error('[质检B] 清理异常:', e.message); }
     }
   }
-  setTimeout(loop, 600000);
+  setTimeout(loop, 60000);
 }
 
 console.log('[质检B] 云托管服务已启动');
