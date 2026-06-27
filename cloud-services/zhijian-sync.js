@@ -397,11 +397,11 @@ async function writeRankTable(token, tblId, label, inspectors) {
     { field: '平均时效', sort: function(a,b){ return a.avgInterval - b.avgInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgInterval); } },
     { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
     { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
-    { field: '全检', stepKey: 'qj' },
-    { field: 'SKU', stepKey: 'sku' },
-    { field: '功能', stepKey: 'gn' },
-    { field: '拆修', stepKey: 'cx' },
-    { field: '外观', stepKey: 'wg' }
+    { field: '全检', stepKey: 'qj', addSite: true },
+    { field: 'SKU', stepKey: 'sku', addSite: true },
+    { field: '功能', stepKey: 'gn', addSite: true },
+    { field: '拆修', stepKey: 'cx', addSite: true },
+    { field: '外观', stepKey: 'wg', addSite: true }
   ];
 
   // Pre-sort each category
@@ -413,7 +413,8 @@ async function writeRankTable(token, tblId, label, inspectors) {
       sorted = inspectors.slice().sort(function(a,b){
         return (b.steps&&b.steps[cat.stepKey]?b.steps[cat.stepKey]:0) - (a.steps&&a.steps[cat.stepKey]?a.steps[cat.stepKey]:0);
       });
-      ranked.push(sorted.map(function(p){ return p.inspector + ' ' + (p.steps&&p.steps[cat.stepKey]?p.steps[cat.stepKey]:0); }));
+      var prefix2 = cat.addSite ? function(p){ return (p.site||'') + p.inspector + ' ' + (p.steps&&p.steps[cat.stepKey]?p.steps[cat.stepKey]:0); } : function(p){ return p.inspector + ' ' + (p.steps&&p.steps[cat.stepKey]?p.steps[cat.stepKey]:0); };
+      ranked.push(sorted.map(prefix2));
     } else {
       sorted = inspectors.slice().sort(cat.sort);
       ranked.push(sorted.map(cat.format));
