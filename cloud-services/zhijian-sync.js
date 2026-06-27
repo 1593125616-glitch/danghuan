@@ -93,11 +93,12 @@ async function syncData() {
     var total = records.data.length;
     console.log('[质检B] 待同步:', total, '条');
 
-    var batch = [], ids = [], written = 0, skipped = 0;
+    var batch = [], ids = [], written = 0;
     for (var rec of records.data) {
       var user = parseUserName(rec.userName);
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
+      if (written < 3) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
       var ck = user.inspector ? (user.site || '') + '-' + user.inspector : '';
       var interval = '', efficiency = '';
