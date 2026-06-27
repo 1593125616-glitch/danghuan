@@ -14,7 +14,8 @@ const TABLE_FIELDS = [
   {"field_name":"分步质检","type":1}
 ];
 
-// 缓存: 用于180天清理标记
+// 缓存: 同用户上一条 createdAt/submitTime 用于跨批次计算
+let lastRec = {};
 let lastCleanup = '';
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -99,11 +100,16 @@ async function syncData() {
       var user = parseUserName(rec.userName);
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
-      if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, '_interval:', rec._interval, '_efficiency:', rec._efficiency, 'user:', user.inspector);
+      if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'interval:', interval, 'efficiency:', efficiency, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
-      // 直接用云函数预计算的间隔/时效(不依赖本地缓存)
-      var interval = (typeof rec._interval === 'number' && rec._interval > 0) ? fmtDiff(rec._interval) : '';
-      var efficiency = (typeof rec._efficiency === 'number' && rec._efficiency > 0) ? fmtDiff(rec._efficiency) : '';
+      // B脚本自己计算间隔/时效,不依赖云函数(同用户组内按createdAt排序后计算)
+      var ck = user.inspector ? (user.site||'') + '-' + user.inspector : '';
+      var interval = '', efficiency = '';
+      if (ck && lastRec[ck]) {
+        if (lastRec[ck].createdAt && submitTime > 0) interval = fmtDiff(submitTime - lastRec[ck].createdAt);
+        if (lastRec[ck].createdAt && createdAt > 0) efficiency = fmtDiff(createdAt - lastRec[ck].createdAt);
+      }
+      lastRec[ck] = { createdAt: createdAt, submitTime: submitTime };
 
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
