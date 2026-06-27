@@ -22,6 +22,8 @@
     var SKIP_KEYS = ['品牌', '机型', 'IMEI'];
 
     function isDetailPage() {
+        // URL优先判断
+        if (window.location.href.indexOf('detail') > -1) return true;
         var bc = document.querySelectorAll('.el-breadcrumb__inner');
         for (var i = 0; i < bc.length; i++) {
             if (bc[i].textContent.trim() === '质检流水详情') return true;
@@ -31,9 +33,11 @@
 
     // ===== 质检流水详情页: 自动读取存储 =====
     if (isDetailPage()) {
-        setTimeout(function() {
-            var pairs = {};
+        var retry = 0;
+        function readTable() {
             var rows = document.querySelectorAll('.el-table__body-wrapper tbody tr');
+            if (!rows.length && retry < 30) { retry++; setTimeout(readTable, 500); return; }
+            var pairs = {};
             for (var i = 0; i < rows.length; i++) {
                 var cells = rows[i].querySelectorAll('td .cell');
                 if (cells.length >= 2) {
@@ -46,7 +50,8 @@
                 GM_setValue(STORE_KEY, JSON.stringify(pairs));
                 console.log('[复检] 已复制 ' + Object.keys(pairs).length + ' 项');
             }
-        }, 2000);
+        }
+        setTimeout(readTable, 2000);
         return;
     }
 
