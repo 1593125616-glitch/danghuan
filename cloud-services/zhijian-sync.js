@@ -319,11 +319,11 @@ async function computeLocalRank() {
   };
 }
 const RANK_TABLE_FIELDS = [
-  {"field_name":"质检数","type":1}, {"field_name":"时效排名","type":1},
-  {"field_name":"平均时效","type":1}, {"field_name":"间隔排名","type":1},
-  {"field_name":"总间隔","type":1}, {"field_name":"全检","type":1},
-  {"field_name":"SKU","type":1}, {"field_name":"功能","type":1},
-  {"field_name":"拆修","type":1}, {"field_name":"外观","type":1}
+  {"field_name":"质检数","type":1}, {"field_name":"平均时效","type":1},
+  {"field_name":"间隔排名","type":1}, {"field_name":"总间隔","type":1},
+  {"field_name":"全检","type":1}, {"field_name":"SKU","type":1},
+  {"field_name":"功能","type":1}, {"field_name":"拆修","type":1},
+  {"field_name":"外观","type":1}
 ];
 let rankCache = {}; // { key: tableId }
 
@@ -372,7 +372,6 @@ async function writeRankTable(token, tblId, label, inspectors) {
 
   var categories = [
     { field: '质检数', sort: function(a,b){ return b.count - a.count; }, format: function(p){ return p.inspector + ' ' + p.count; } },
-    { field: '时效排名', sort: function(a,b){ return a.avgEfficiency - b.avgEfficiency; }, format: function(p){ return p.inspector + ' ' + fmtSec(p.avgEfficiency); } },
     { field: '平均时效', sort: function(a,b){ return a.avgEfficiency - b.avgEfficiency; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgEfficiency); } },
     { field: '间隔排名', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return p.inspector + ' ' + fmtSec(p.totalInterval); } },
     { field: '总间隔', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
