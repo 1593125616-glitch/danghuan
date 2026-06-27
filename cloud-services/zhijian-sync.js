@@ -174,7 +174,146 @@ loop();
 // 启动时也同步一次排名(测试)
 setTimeout(function(){ console.log('[质检B] 首次排名同步...'); syncRankToFeishu(); }, 10000);
 
-// ===== 排名同步 =====
+async function computeLocalRank() {
+  var data = await cloudGet('/stats');
+  if (!data || data.code !== 0 || !data.data || !data.data.length) return null;
+  var items = data.data;
+
+  var now = new Date();
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var yesterdayStart = new Date(todayStart.getTime() - 24*60*60*1000);
+  var dow = now.getDay(); if (dow === 0) dow = 7;
+  var weekStart = new Date(todayStart.getTime() - (dow - 1) * 24*60*60*1000);
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  function parseUser(userName) {
+    if (!userName) return { name: '', site: '' };
+    var parts = userName.split('-');
+    var rawName = parts.length >= 2 ? parts[1] : parts[0];
+    var name = rawName.includes('+') ? rawName.split('+').pop() : rawName;
+    var site = parts.length >= 4 ? (parts[2] + '-' + parts[3]) : (parts[2] || '');
+    return { name, site };
+  }
+
+  function getAt(r) {
+    if (!r || !r.createdAt) return 0;
+    var v = r.createdAt;
+    if (v.$date) return v.$date;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') { var d = new Date(v); return isNaN(d.getTime()) ? 0 : d.getTime(); }
+    if (v instanceof Date) return v.getTime();
+    return 0;
+  }
+
+  function getSt(r) {
+    if (!r || !r.submitTime) return 0;
+    var d = new Date(String(r.submitTime).replace(/-/g, '/') + ' GMT+0800');
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  function filterByTime(data, start, end) {
+    return data.filter(function(r) {
+      var ct = getAt(r);
+      if (!ct) return false;
+      if (start && ct < start.getTime()) return false;
+      if (end && ct >= end.getTime()) return false;
+      return true;
+    });
+  }
+
+  function calcStats(data, maxGap) {
+    var userMap = {};
+    for (var i = 0; i < data.length; i++) {
+      var r = data[i];
+      if (!r.userName || r.detectionLine === 'Y线') continue;
+      var pu = parseUser(r.userName);
+      if (!pu.name) continue;
+      if (!userMap[pu.name]) userMap[pu.name] = { site: pu.site, records: [] };
+      userMap[pu.name].records.push(r);
+    }
+
+    var result = [];
+    for (var name in userMap) {
+      var ug = userMap[name];
+      ug.records.sort(function(a, b) { return getAt(a) - getAt(b); });
+      var siteMaxGap = /深圳.*龙岗/.test(ug.site) ? 5400000 : 7200000;
+      var allTime = 0, allInterval = 0, validCount = 0, noStepCount = 0, noStepTime = 0;
+      var stepMap = {};
+      for (var steps of ['step1', 'step2', 'step3', 'step4']) stepMap[steps] = { count: 0, inspTime: 0, interval: 0 };
+
+      for (var j = 0; j < ug.records.length; j++) {
+        var rec = ug.records[j];
+        var ct = getAt(rec), st = getSt(rec);
+        if (!ct || !st || ct <= st) continue;
+        validCount++;
+        var insp = ct - st;
+        allTime += insp;
+        var step = rec.step || '';
+        var m = step.match(/(\d+)\/(\d+)/);
+        var stepType = 'noStep';
+        if (m && parseInt(m[2]) > 1) {
+          var num = parseInt(m[1]);
+          if (num === 1) stepType = 'step1';
+          else if (num === 2) stepType = 'step2';
+          else if (num === 3) stepType = 'step3';
+          else if (num === 4) stepType = 'step4';
+        }
+        if (stepType === 'noStep') { noStepCount++; noStepTime += insp; }
+        else if (stepMap[stepType]) { stepMap[stepType].count++; stepMap[stepType].inspTime += insp; }
+
+        if (j > 0) {
+          var prevAt = getAt(ug.records[j - 1]);
+          var gap = st - prevAt;
+          if (gap > 0 && gap < siteMaxGap) {
+            allInterval += gap;
+            if (stepType !== 'noStep' && stepMap[stepType]) stepMap[stepType].interval += gap;
+          }
+        }
+      }
+
+      var stepGroups = {};
+      for (var sk of ['step1', 'step2', 'step3', 'step4']) {
+        var g = stepMap[sk];
+        stepGroups[sk] = {
+          count: g.count,
+          avgInspTime: g.count > 0 ? Math.round(g.inspTime / g.count / 1000) : 0,
+          totalInterval: Math.round(g.interval / 1000)
+        };
+      }
+
+      result.push({
+        inspector: name,
+        site: ug.site,
+        count: validCount,
+        avgTime: noStepCount > 0 ? Math.round(noStepTime / noStepCount / 1000) : 0,
+        totalInterval: Math.round(allInterval / 1000),
+        stepGroups: stepGroups
+      });
+    }
+    return result;
+  }
+
+  function applyRanks(inspectors) {
+    if (!inspectors.length) return;
+    // 时效排名(升序)
+    var byInsp = inspectors.slice().sort((a,b)=>a.avgTime-b.avgTime);
+    var inspR = {}; for (var i = 0; i < byInsp.length; i++) { if (i > 0 && byInsp[i].avgTime === byInsp[i-1].avgTime) inspR[byInsp[i].inspector] = inspR[byInsp[i-1].inspector]; else inspR[byInsp[i].inspector] = i + 1; }
+    // 间隔排名(降序)
+    var byInt = inspectors.slice().sort((a,b)=>b.totalInterval-a.totalInterval);
+    var intR = {}; for (var j = 0; j < byInt.length; j++) { if (j > 0 && byInt[j].totalInterval === byInt[j-1].totalInterval) intR[byInt[j].inspector] = intR[byInt[j-1].inspector]; else intR[byInt[j].inspector] = j + 1; }
+    for (var k = 0; k < inspectors.length; k++) { inspectors[k].inspRank = inspR[inspectors[k].inspector]; inspectors[k].intervalRank = intR[inspectors[k].inspector]; }
+  }
+
+  var dailyData = filterByTime(items, yesterdayStart, todayStart);
+  var weeklyData = filterByTime(items, weekStart, null);
+  var monthlyData = filterByTime(items, monthStart, null);
+
+  return {
+    daily: { inspectors: calcStats(dailyData, 7200000) },
+    weekly: { inspectors: calcStats(weeklyData, 7200000) },
+    monthly: { inspectors: calcStats(monthlyData, 7200000) }
+  };
+}
 const RANK_TABLE_FIELDS = [
   {"field_name":"统计时间","type":1}, {"field_name":"质检数","type":1},
   {"field_name":"时效排名","type":1}, {"field_name":"平均时效","type":1},
@@ -278,10 +417,9 @@ async function cleanupOldRankTables(token) {
 async function syncRankToFeishu() {
   try {
     var token = await getToken();
-    console.log('[排名] 获取排名数据...');
-    var data = await cloudGet('/rank');
-    if (!data || data.code !== 0 || !data.data) { console.log('[排名] 无数据, code:', data?data.code:'null'); return; }
-    var rd = data.data;
+    console.log('[排名] 本地计算排名...');
+    var rd = await computeLocalRank();
+    if (!rd) { console.log('[排名] 无数据'); return; }
 
     var now = new Date();
     var yesterday = new Date(now.getTime() - 24*60*60*1000);
