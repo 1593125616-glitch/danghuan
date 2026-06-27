@@ -170,6 +170,8 @@ async function loop() {
 console.log('[质检B] 云托管服务已启动');
 console.log('[质检B] 当前时间:', new Date().toString());
 loop();
+// 启动时也同步一次排名(测试)
+setTimeout(function(){ console.log('[质检B] 首次排名同步...'); syncRankToFeishu(); }, 10000);
 
 // ===== 排名同步 =====
 const RANK_TABLE_FIELDS = [
