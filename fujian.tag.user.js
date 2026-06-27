@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         复检脚本
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.2
 // @description  质检流水详情页自动复制问题项+答案项,质检页点击同步开关自动勾选
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
