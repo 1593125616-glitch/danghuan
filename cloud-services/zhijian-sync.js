@@ -233,7 +233,7 @@ async function computeLocalRank() {
     var userMap = {};
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
-      if (!r.userName || r.detectionLine === 'Y线') continue;
+      if (!r.userName) continue;
       var pu = parseUser(r.userName);
       if (!pu.name) continue;
       if (!userMap[pu.name]) userMap[pu.name] = { site: pu.site, records: [] };
@@ -257,15 +257,27 @@ async function computeLocalRank() {
         dayCount[dk] = (dayCount[dk] || 0) + 1;
       }
 
-      var intervalSum = 0, totalGapSum = 0, validCount = 0;
+      var intervalSum = 0, totalGapSum = 0, workSum = 0, validCount = 0;
       var stepCounts = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepInterval = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
+
+      var lastValidIdx = -1;
 
       for (var j = 0; j < ug.records.length; j++) {
         var rec = ug.records[j];
         var ct = getAt(rec), st = getSt(rec);
         if (!ct || !st) continue;
+
+        // Y线不分步: createdAt到submitTime < 2分钟 → 排除
+        if (rec.detectionLine === 'Y线') {
+          var step2 = rec.step || '';
+          var m3 = step2.match(/(\d+)\/(\d+)/);
+          if (!m3 || parseInt(m3[2]) !== 4) {
+            if (ct && st && (st - ct) < 120000) continue;
+          }
+        }
+
         validCount++;
         var step = rec.step || '';
         var m2 = step.match(/(\d+)\/(\d+)/);
@@ -277,27 +289,33 @@ async function computeLocalRank() {
           else if (m2[1] === '4') sk = 'wg';
         }
         stepCounts[sk]++;
+        workSum += (ct - st);
 
-        if (j > 0) {
-          var prevAt = getAt(ug.records[j - 1]);
+        if (lastValidIdx >= 0) {
+          var prevRec = ug.records[lastValidIdx];
+          var prevAt = getAt(prevRec);
           var prevDay = new Date(prevAt).toDateString();
           var curDay = new Date(ct).toDateString();
-          // 同一上班天(>10台)用小间隙,其他用大间隙
           var gapLimit = (prevDay === curDay && dayCount[prevDay] > 10) ? siteSmallGap : bigGap;
-          var gap = st - prevAt;
-          if (gap > 0 && gap < gapLimit) {
-            intervalSum += gap;
-            stepInterval[sk] += gap;
+          // 跳过记录时间隔算0,相邻有效记录正常计算
+          if (lastValidIdx === j - 1) {
+            var gap = st - prevAt;
+            if (gap > 0 && gap < gapLimit) {
+              intervalSum += gap;
+              stepInterval[sk] += gap;
+            }
+            var tg = ct - prevAt;
+            if (tg > 0) totalGapSum += tg;
           }
-          var tg = ct - prevAt;
-          if (tg > 0) totalGapSum += tg;
         }
+
+        lastValidIdx = j;
       }
 
       // 总间隔平均 = sum / (count-1), 取第2台开始算
       var avgTotalGap = validCount > 1 ? Math.round(totalGapSum / (validCount - 1) / 1000) : 0;
-      // 平均时效 = intervalSum / (count-1)
-      var avgInterval = validCount > 1 ? Math.round(intervalSum / (validCount - 1) / 1000) : 0;
+      // 平均时效 = 每单(createdAt - submitTime)之和 / 数量
+      var avgInterval = validCount > 0 ? Math.round(workSum / validCount / 1000) : 0;
 
       result.push({
         inspector: name,
@@ -311,19 +329,6 @@ async function computeLocalRank() {
       });
     }
     return result;
-  }
-
-  function applyRanks(inspectors) {
-    if (!inspectors.length) return;
-    // 间隔排名(降序,间隔时间大的排前面)
-    var byInt = inspectors.slice().sort((a,b)=>b.totalInterval-a.totalInterval);
-    var intR = {};
-    for (var j = 0; j < byInt.length; j++) { if (j > 0 && byInt[j].totalInterval === byInt[j-1].totalInterval) intR[byInt[j].inspector] = intR[byInt[j-1].inspector]; else intR[byInt[j].inspector] = j + 1; }
-    // 总间隔排名(升序,平均小的排前面)
-    var byGap = inspectors.slice().sort((a,b)=>a.avgTotalGap-b.avgTotalGap);
-    var gapR = {};
-    for (var e = 0; e < byGap.length; e++) { if (e > 0 && byGap[e].avgTotalGap === byGap[e-1].avgTotalGap) gapR[byGap[e].inspector] = gapR[byGap[e-1].inspector]; else gapR[byGap[e].inspector] = e + 1; }
-    for (var k = 0; k < inspectors.length; k++) { inspectors[k].intervalRank = intR[inspectors[k].inspector]; inspectors[k].gapRank = gapR[inspectors[k].inspector]; }
   }
 
   var dailyData = filterByTime(items, yesterdayStart, todayStart);
