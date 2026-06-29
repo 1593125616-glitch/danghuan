@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.3
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -161,15 +161,16 @@
         return parts.length >= 2 ? parts[1] : parts[0];
     }
 
-    let barcodeTime = '';
+    let barcodeTimeMap = {};
     let lastBarcode = '';
     let lastUploadedKey = '';
 
-    function recordBarcodeTime(){
+    function recordBarcodeTime(barcode){
         var now = new Date();
         var pad = function(n){return String(n).padStart(2,'0');};
-        barcodeTime = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-        console.log('[质检] 扫码时间:', barcodeTime);
+        var ts = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+        barcodeTimeMap[barcode] = ts;
+        console.log('[质检] 扫码时间:', ts, '条码:', barcode);
     }
 
     // 轮询检测条码变化(VUE v-model不触发DOM事件，每次重新获取input以防Vue重建DOM)
@@ -177,7 +178,7 @@
         var inp = document.querySelector('input[placeholder="请输入物品条码"]');
         if(!inp) return;
         var v = inp.value.trim();
-        if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(); }
+        if(v && v !== lastBarcode){ lastBarcode = v; recordBarcodeTime(v); }
         else if(!v && lastBarcode){ lastBarcode = ''; }
     }, 500);
 
@@ -186,16 +187,17 @@
         if (!btn) return;
         const btnText = btn.textContent.trim();
         if (btnText === '提交' || btnText === '提 交') {
+            const barcode = getBarcode();
             const data = {
-                barcode: getBarcode(),
+                barcode: barcode,
                 userName: getUserInfo(),
                 category: getCategory(),
                 detectionLine: getDetectionLine(),
                 step: getStepInfo(),
-                submitTime: barcodeTime || getTimestamp()
+                submitTime: barcodeTimeMap[barcode] || getTimestamp()
             };
             console.log('[质检] 提交数据:', JSON.stringify(data));
-            console.log('[质检] barcodeTime:', barcodeTime, 'fallback:', !barcodeTime);
+            console.log('[质检] barcodeTime:', barcodeTimeMap[barcode] || '', 'fallback:', !barcodeTimeMap[barcode]);
             if (data.barcode && data.userName) {
                 // K线 + 物品30天内在库质检报告 + 保修机 → 跳过上传
                 if (data.detectionLine === 'K线') {
@@ -209,14 +211,14 @@
                 var thisKey = data.barcode + '|' + data.step + '|' + data.userName;
                 if (thisKey === lastUploadedKey) {
                     console.log('[质检] 重复提交，跳过:', data.barcode, data.step);
-                    lastBarcode = data.barcode; barcodeTime = '';
+                    lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
                     return;
                 }
                 lastUploadedKey = thisKey;
                 const inspector = getInspector(data.userName);
                 uploadToCloud(data);
                 console.log('[质检] 自动上传:', JSON.stringify(data));
-                lastBarcode = data.barcode; barcodeTime = '';
+                lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
             } else {
                 console.warn('[质检] 条码或用户信息为空，跳过上传');
             }
@@ -351,7 +353,7 @@
 
     function fetchRank() {
         var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
-        if (!/潘瑶|pan.*yao/i.test(myName)) return;
+        if (!myName) return;
         GM_xmlhttpRequest({
             method: 'GET',
             url: CLOUD_FN_URL + '/rank',
@@ -360,7 +362,8 @@
                     var r = JSON.parse(resp.responseText);
                     if (r.code === 0 && r.data) {
                         var parts = myName.split('-');
-                        var myInspector = parts.length >= 2 ? parts[1] : '';
+                        var rawInspector = parts.length >= 2 ? parts[1] : '';
+                        var myInspector = rawInspector.includes('+') ? rawInspector.split('+').pop() : rawInspector;
                         var mySite = parts.length >= 4 ? (parts[2] + '-' + parts[3]) : '深圳-龙岗';
                         showRankPanel(r.data, myInspector, mySite);
                     }
