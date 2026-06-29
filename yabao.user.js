@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.77
+// @version      0.78
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -685,7 +685,7 @@
 
     // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
     const YB_CHECK_KEY = 'yabao_last_update_check';
-    const YB_CHECK_INTERVAL = 60 * 60 * 1000;
+    const YB_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
     const YB_SCRIPT_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/yabao.user.js';
 
     function isNewerVer(remote, current) {

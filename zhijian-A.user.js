@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.3
+// @version      3.4
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -227,7 +227,7 @@
 
     // ========== 自动检测更新（每6小时，刷新不重置计时） ==========
     const A_CK_KEY = 'zhijian_a_last_update_check';
-    const A_CK_INTERVAL = 60 * 60 * 1000;
+    const A_CK_INTERVAL = 6 * 60 * 60 * 1000;
     const A_URL = 'https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/zhijian-A.user.js';
 
     function isNewerVer(remote, current) {
