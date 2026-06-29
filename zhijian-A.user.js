@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.2
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -351,7 +351,7 @@
 
     function fetchRank() {
         var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
-        if (!/潘瑶|pan.*yao/i.test(myName)) return;
+        if (!myName) return;
         GM_xmlhttpRequest({
             method: 'GET',
             url: CLOUD_FN_URL + '/rank',
@@ -360,7 +360,8 @@
                     var r = JSON.parse(resp.responseText);
                     if (r.code === 0 && r.data) {
                         var parts = myName.split('-');
-                        var myInspector = parts.length >= 2 ? parts[1] : '';
+                        var rawInspector = parts.length >= 2 ? parts[1] : '';
+                        var myInspector = rawInspector.includes('+') ? rawInspector.split('+').pop() : rawInspector;
                         var mySite = parts.length >= 4 ? (parts[2] + '-' + parts[3]) : '深圳-龙岗';
                         showRankPanel(r.data, myInspector, mySite);
                     }
