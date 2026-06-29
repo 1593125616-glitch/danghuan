@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         复检脚本
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  质检流水详情页自动复制问题项+答案项,质检页点击同步开关自动勾选
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -42,7 +42,10 @@
                 var cells = rows[i].querySelectorAll('td .cell');
                 if (cells.length >= 2) {
                     var key = cells[0].textContent.trim();
-                    var val = cells[1].textContent.trim();
+                    var valCell = cells[1].cloneNode(true);
+                    var logos = valCell.querySelectorAll('.app-logo');
+                    for (var li = 0; li < logos.length; li++) logos[li].remove();
+                    var val = valCell.textContent.trim();
                     if (key && val) pairs[key] = val;
                 }
             }
