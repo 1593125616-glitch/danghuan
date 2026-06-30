@@ -31,19 +31,19 @@ function parseUserName(userName) {
   var inspector = '';
   var site = '';
 
-  // 新格式: 工号-城市-质检姓名-城市, 质检姓名以"质检"开头
+  // 查找包含"质检"的段，提取质检后面的名字
   var qcIdx = -1;
   for (var i = 1; i < parts.length; i++) {
-    if (parts[i].indexOf('质检') === 0) {
-      inspector = parts[i].replace(/^质检/, '');
+    if (parts[i].indexOf('质检') !== -1) {
+      inspector = parts[i].replace(/^.*?质检/, '');
       qcIdx = i;
       break;
     }
   }
 
   if (qcIdx >= 0) {
-    // site: 质检之后的部分
-    site = parts[parts.length - 1];
+    // site: 质检段之后的所有部分用"-"连接
+    site = parts.slice(qcIdx + 1).join('-');
   } else {
     // 旧格式: 工号-姓名-城市-区域
     inspector = parts.length >= 2 ? parts[1] : '';
@@ -227,15 +227,15 @@ async function computeLocalRank() {
 
     var qcIdx = -1;
     for (var i = 1; i < parts.length; i++) {
-      if (parts[i].indexOf('质检') === 0) {
-        name = parts[i].replace(/^质检/, '');
+      if (parts[i].indexOf('质检') !== -1) {
+        name = parts[i].replace(/^.*?质检/, '');
         qcIdx = i;
         break;
       }
     }
 
     if (qcIdx >= 0) {
-      site = parts[parts.length - 1];
+      site = parts.slice(qcIdx + 1).join('-');
     } else {
       var rawName = parts.length >= 2 ? parts[1] : parts[0];
       name = rawName.includes('+') ? rawName.split('+').pop() : rawName;
