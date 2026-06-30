@@ -132,14 +132,9 @@ async function syncData() {
       var submitTime = parseSubmitTime(rec);
       if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'interval:', interval, 'efficiency:', efficiency, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
-      // B脚本自己计算间隔/时效,不依赖云函数(同用户组内按createdAt排序后计算)
-      var ck = user.inspector ? (user.site||'') + '-' + user.inspector : '';
-      var interval = '', efficiency = '';
-      if (ck && lastRec[ck]) {
-        if (lastRec[ck].createdAt && submitTime > 0) interval = fmtDiff(submitTime - lastRec[ck].createdAt);
-        if (lastRec[ck].createdAt && createdAt > 0) efficiency = fmtDiff(createdAt - lastRec[ck].createdAt);
-      }
-      lastRec[ck] = { createdAt: createdAt, submitTime: submitTime }; saveRec();
+      // 使用云函数预计算的间隔/时效(已包含上一条已推送记录)
+      var interval = (rec._interval > 0) ? fmtDiff(rec._interval) : '';
+      var efficiency = (rec._efficiency > 0) ? fmtDiff(rec._efficiency) : '';
 
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
