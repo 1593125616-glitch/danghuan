@@ -27,10 +27,35 @@ function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function parseUserName(userName) {
   if (!userName) return { jobNo: '', inspector: '', site: '' };
   var parts = userName.split('-');
-  var inspector = parts.length >= 2 ? parts[1] : '';
-  if (inspector.includes('+')) inspector = inspector.split('+').pop();
-  var site = parts.length >= 4 ? parts[2] + '-' + parts[3] : (parts[2] || '');
-  return { jobNo: parts[0] || '', inspector, site };
+  var jobNo = parts[0] || '';
+  var inspector = '';
+  var site = '';
+
+  // 新格式: 工号-城市-质检姓名-城市, 质检姓名以"质检"开头
+  var qcIdx = -1;
+  for (var i = 1; i < parts.length; i++) {
+    if (parts[i].indexOf('质检') === 0) {
+      inspector = parts[i].replace(/^质检/, '');
+      qcIdx = i;
+      break;
+    }
+  }
+
+  if (qcIdx >= 0) {
+    // site: 质检之后的部分
+    site = parts[parts.length - 1];
+  } else {
+    // 旧格式: 工号-姓名-城市-区域
+    inspector = parts.length >= 2 ? parts[1] : '';
+    if (inspector.includes('+')) inspector = inspector.split('+').pop();
+    if (parts.length >= 4) {
+      site = parts[2] + '-' + parts[3];
+    } else if (parts.length >= 3) {
+      site = parts[2];
+    }
+  }
+
+  return { jobNo, inspector, site };
 }
 
 function mapCategory(cat) {
@@ -197,9 +222,30 @@ async function computeLocalRank() {
   function parseUser(userName) {
     if (!userName) return { name: '', site: '' };
     var parts = userName.split('-');
-    var rawName = parts.length >= 2 ? parts[1] : parts[0];
-    var name = rawName.includes('+') ? rawName.split('+').pop() : rawName;
-    var site = parts.length >= 4 ? (parts[2] + '-' + parts[3]) : (parts[2] || '');
+    var name = '';
+    var site = '';
+
+    var qcIdx = -1;
+    for (var i = 1; i < parts.length; i++) {
+      if (parts[i].indexOf('质检') === 0) {
+        name = parts[i].replace(/^质检/, '');
+        qcIdx = i;
+        break;
+      }
+    }
+
+    if (qcIdx >= 0) {
+      site = parts[parts.length - 1];
+    } else {
+      var rawName = parts.length >= 2 ? parts[1] : parts[0];
+      name = rawName.includes('+') ? rawName.split('+').pop() : rawName;
+      if (parts.length >= 4) {
+        site = parts[2] + '-' + parts[3];
+      } else if (parts.length >= 3) {
+        site = parts[2];
+      }
+    }
+
     return { name, site };
   }
 
