@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.5
+// @version      3.9
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -58,39 +58,82 @@
         return '';
     }
 
-    function getCategory() {
-        if (window.dropdownSelections && window.dropdownSelections['品类']) {
-            return window.dropdownSelections['品类'];
-        }
-        const labelNames = ['品类'];
-        const items = document.querySelectorAll('.el-form-item');
-        for (const item of items) {
-            const label = item.querySelector('.el-form-item__label');
-            if (label && labelNames.some(n => label.textContent.trim() === n)) {
-                // 方式1: input 值
-                const inp = item.querySelector('.el-input__inner');
+    function getFieldValue(labelName) {
+        var items = document.querySelectorAll('.el-form-item');
+        for (var i = 0; i < items.length; i++) {
+            var label = items[i].querySelector('.el-form-item__label');
+            if (label && label.textContent.trim() === labelName) {
+                var inp = items[i].querySelector('.el-input__inner');
                 if (inp) {
-                    let val = inp.value.trim();
-                    if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') {
-                        val = inp.placeholder.trim();
-                    }
+                    var val = inp.value.trim();
+                    if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') val = inp.placeholder.trim();
                     if (val && val !== '请选择') return val;
                 }
-                // 方式2: 选中标签文本（Vue 异步渲染时 DOM 还没更新但文本已显示）
-                const tag = item.querySelector('.el-select__tags-text, .el-select__selection span, .el-select .el-tag');
+                var tag = items[i].querySelector('.el-select__tags-text, .el-select__selection span, .el-select .el-tag');
                 if (tag) {
-                    let val = tag.textContent.trim();
-                    if (val && val !== '请选择') return val;
+                    var tval = tag.textContent.trim();
+                    if (tval && tval !== '请选择') return tval;
                 }
             }
         }
         return '';
     }
 
+    function getCategory() {
+        if (window.dropdownSelections && window.dropdownSelections['品类']) {
+            return window.dropdownSelections['品类'];
+        }
+        return getFieldValue('品类');
+    }
+
+    function getBrand() { return getFieldValue('品牌'); }
+    function getModel() { return getFieldValue('机型'); }
+
     function getTimestamp() {
         const now = new Date();
         const pad = n => String(n).padStart(2, '0');
         return now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    }
+
+    function getMachineType() {
+        var tags = document.querySelectorAll('.goods-source');
+        if (!tags.length) return '';
+        var types = [];
+        for (var i = 0; i < tags.length; i++) {
+            var t = tags[i].textContent.trim();
+            if (t) types.push(t);
+        }
+        return types.join(',');
+    }
+
+    function getAllSelections() {
+        var labels = document.querySelectorAll('.el-form-item__label');
+        var pairs = [];
+        var skipLabels = ['检测线', '物品条码', '品类', '品牌', '机型'];
+        for (var i = 0; i < labels.length; i++) {
+            var text = labels[i].textContent.trim();
+            if (!text) continue;
+            if (skipLabels.indexOf(text) !== -1) continue;
+            var content = labels[i].nextElementSibling;
+            if (!content) continue;
+            var active = content.querySelector('.el-radio-button.is-active .el-radio-button__inner');
+            if (!active) active = content.querySelector('.el-radio.is-checked .el-radio__label');
+            var val = '';
+            if (active) {
+                var span = active.querySelector('span');
+                val = span ? span.textContent.trim() : active.textContent.trim();
+            }
+            if (!val) {
+                var inp = content.querySelector('.el-input__inner');
+                if (inp && inp.value && inp.value !== '请选择') val = inp.value.trim();
+            }
+            if (!val) {
+                var tag = content.querySelector('.el-tag');
+                if (tag) val = tag.textContent.trim();
+            }
+            if (val) pairs.push(text + ':' + val);
+        }
+        return pairs.join('\n');
     }
 
     function getStepInfo() {
@@ -192,8 +235,12 @@
                 barcode: barcode,
                 userName: getUserInfo(),
                 category: getCategory(),
+                brand: getBrand(),
+                model: getModel(),
                 detectionLine: getDetectionLine(),
                 step: getStepInfo(),
+                machineType: getMachineType(),
+                selections: getAllSelections(),
                 submitTime: barcodeTimeMap[barcode] || getTimestamp()
             };
             console.log('[质检] 提交数据:', JSON.stringify(data));
