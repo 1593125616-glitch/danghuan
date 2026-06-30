@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.9
+// @version      4.0
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -332,12 +332,28 @@
         var stepLabels = ['qj','sku','gn','cx','wg'];
         var stepNames = ['全检','SKU','功能','拆修','外观'];
 
-        // 每类步骤各取前N人组成5列排名
+        // 按站点分别排名: 沙井前3, 其他站点前2
         var stepRanks = {};
+        var siteTopN = { '深圳-沙井': 3 };
+        function getTopN(site) { return siteTopN[site] || 2; }
+
         for (var si = 0; si < stepLabels.length; si++) {
             var key = stepLabels[si];
-            var sorted = inspectors.slice().sort(function(a,b){ return (b[key]||0) - (a[key]||0); });
-            stepRanks[key] = sorted;
+            var bySite = {};
+            for (var ii = 0; ii < inspectors.length; ii++) {
+                var s = inspectors[ii].site || '未知';
+                if (!bySite[s]) bySite[s] = [];
+                bySite[s].push(inspectors[ii]);
+            }
+            var ranked = [];
+            var siteNames = Object.keys(bySite).sort();
+            for (var sn = 0; sn < siteNames.length; sn++) {
+                var site = siteNames[sn];
+                var topN = getTopN(site);
+                var sorted = bySite[site].slice().sort(function(a,b){ return (b[key]||0) - (a[key]||0); });
+                ranked = ranked.concat(sorted.slice(0, topN));
+            }
+            stepRanks[key] = ranked;
         }
 
         // 找自己
