@@ -36,6 +36,7 @@ function parseUserName(userName) {
   for (var i = 1; i < parts.length; i++) {
     if (parts[i].indexOf('质检') !== -1) {
       inspector = parts[i].replace(/^.*?质检/, '');
+      if (inspector.includes('+')) inspector = inspector.split('+').pop();
       qcIdx = i;
       break;
     }
@@ -229,6 +230,7 @@ async function computeLocalRank() {
     for (var i = 1; i < parts.length; i++) {
       if (parts[i].indexOf('质检') !== -1) {
         name = parts[i].replace(/^.*?质检/, '');
+        if (name.includes('+')) name = name.split('+').pop();
         qcIdx = i;
         break;
       }
