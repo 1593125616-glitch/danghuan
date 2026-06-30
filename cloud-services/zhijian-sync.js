@@ -277,13 +277,15 @@ async function computeLocalRank() {
     });
   }
 
+  var MANAGER_BLACKLIST = ['冯琳','陈犁','耿少朋','李滋业','沈力','王航飞','杜鹏','甘冰'];
+
   function calcStats(data, maxGap) {
     var userMap = {};
     for (var i = 0; i < data.length; i++) {
       var r = data[i];
       if (!r.userName) continue;
       var pu = parseUser(r.userName);
-      if (!pu.name) continue;
+      if (!pu.name || MANAGER_BLACKLIST.indexOf(pu.name) !== -1) continue;
       if (!userMap[pu.name]) userMap[pu.name] = { site: pu.site, records: [] };
       userMap[pu.name].records.push(r);
     }
