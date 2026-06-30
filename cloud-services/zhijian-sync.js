@@ -159,7 +159,7 @@ function parseSelections(selections) {
       result.gongneng.push(val);
     }
     if (key === '屏幕显示' || key === '屏幕外观' || key === '边框背板' || key === '外壳维修' || key === '机身弯曲') {
-      result.biankuang.push(key + ':' + val);
+      result.biankuang.push(val);
     }
   }
   return result;
