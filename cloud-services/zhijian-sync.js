@@ -4,14 +4,21 @@ const CONFIG = require('./config');
 const TABLE_FIELDS = [
   {"field_name":"提交时间","type":5,"property":{"date_formatter":"yyyy/MM/dd HH:mm"}},
   {"field_name":"物品条码","type":1},
-  {"field_name":"品类","type":3,"property":{"options":[{"name":"手机","color":18},{"name":"3C","color":12},{"name":"笔记本","color":15},{"name":"平板","color":11}]}},
+  {"field_name":"检测线","type":1},
+  {"field_name":"品类","type":1},
+  {"field_name":"品牌","type":1},
+  {"field_name":"机型","type":1},
+  {"field_name":"渠道","type":1},
   {"field_name":"站点","type":3,"property":{"options":[{"name":"深圳-龙岗","color":18},{"name":"深圳-沙井","color":16},{"name":"合肥","color":12},{"name":"石家庄","color":15},{"name":"成都","color":11}]}},
   {"field_name":"质检人","type":1},
   {"field_name":"工号","type":1},
   {"field_name":"质检时间","type":1},
   {"field_name":"质检间隔时间","type":1},
   {"field_name":"质检时效","type":1},
-  {"field_name":"分步质检","type":1}
+  {"field_name":"分步质检","type":1},
+  {"field_name":"功能","type":1},
+  {"field_name":"拆修","type":1},
+  {"field_name":"边框背板","type":1}
 ];
 
 // 持久化缓存: 防止更新重启丢失上一台记录
@@ -113,6 +120,45 @@ function parseSubmitTime(r) {
   return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+function parseSelections(selections) {
+  var result = { gongneng: [], caixiu: [], biankuang: [] };
+  if (!selections) return result;
+  var lines = selections.split('\n');
+  var caixiuKeys = [
+    '系统弹窗-正品部件/有售后案例','系统弹窗-部件已使用',
+    '后摄维修不检测','后摄像头有维修','后摄像头有缺失',
+    '前摄维修不检测','前摄像头有维修','前摄像头有缺失',
+    '屏幕打磨/黑纸破损等','屏幕更换外屏等','屏幕芯片/背光/排线维修痕迹等',
+    '第三方屏幕/屏未知部件等','主板区域贴标/盖章/屏蔽罩形变等','主板维修/破损/弯曲等',
+    '无法连接电脑'
+  ];
+  var gongnengKeys = [
+    'iCloud无法注销','无线异常','充电异常','光线、距离感应不正常',
+    '面容无法录入和识别','声音功能异常','振动功能不正常','触摸失灵/延迟',
+    '前摄拍照有斑','前摄拍照有彩点','前摄画面异常/抖动/模糊/不对焦','前摄无法拍照',
+    '后摄拍照有斑','后摄拍照有彩点','后摄画面异常/抖动/模糊/不对焦/闪光灯异常','后摄无法拍照',
+    '指南针功能不正常','通话异常(不读卡/不通话/无信号/无基带)','按键无反馈/失灵',
+    'ID/账户锁无法解除','NFC功能异常','NFC公交卡未解除','指纹无法完全录入和解锁','面容无法录入和识别'
+  ];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    var idx = line.indexOf(':');
+    if (idx === -1) continue;
+    var key = line.substring(0, idx).trim();
+    var val = line.substring(idx + 1).trim();
+    if (caixiuKeys.indexOf(val) !== -1) {
+      result.caixiu.push(val);
+    } else if (gongnengKeys.indexOf(val) !== -1) {
+      result.gongneng.push(val);
+    }
+    if (key === '屏幕显示' || key === '屏幕外观' || key === '边框背板' || key === '外壳维修' || key === '机身弯曲') {
+      result.biankuang.push(key + ':' + val);
+    }
+  }
+  return result;
+}
+
 async function syncData() {
   try {
     var token = await getToken();
@@ -132,13 +178,17 @@ async function syncData() {
       var submitTime = parseSubmitTime(rec);
       if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'interval:', interval, 'efficiency:', efficiency, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
-      // 使用云函数预计算的间隔/时效(已包含上一条已推送记录)
       var interval = (rec._interval > 0) ? fmtDiff(rec._interval) : '';
       var efficiency = (rec._efficiency > 0) ? fmtDiff(rec._efficiency) : '';
+      var selInfo = parseSelections(rec.selections);
 
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
-      fields['品类'] = mapCategory(rec.category || '');
+      if (rec.detectionLine) fields['检测线'] = rec.detectionLine;
+      fields['品类'] = rec.category || '';
+      if (rec.brand) fields['品牌'] = rec.brand;
+      if (rec.model) fields['机型'] = rec.model;
+      if (rec.machineType) fields['渠道'] = rec.machineType;
       if (user.jobNo) fields['工号'] = user.jobNo;
       if (user.inspector) fields['质检人'] = user.inspector;
       if (user.site) fields['站点'] = user.site;
@@ -147,6 +197,9 @@ async function syncData() {
       fields['质检间隔时间'] = interval || '';
       fields['质检时效'] = efficiency || '';
       fields['分步质检'] = rec.step || '';
+      fields['功能'] = selInfo.gongneng.length ? selInfo.gongneng.join(',') : '';
+      fields['拆修'] = selInfo.caixiu.length ? selInfo.caixiu.join(',') : '';
+      fields['边框背板'] = selInfo.biankuang.join('; ');
 
       batch.push({ fields });
       ids.push(rec._id);
