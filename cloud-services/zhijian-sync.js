@@ -93,7 +93,7 @@ async function getOrCreateWeeklyTable(token) {
   var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
   var m1 = monday.getFullYear() + '年' + (monday.getMonth() + 1) + '月' + monday.getDate();
   var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
-  var nameV2 = 'v2-' + m1 + '-' + m2;
+  var nameV2 = '数据表' + m1.substring(m1.indexOf('年')+1).replace('年','月') + '日-' + m2;
   for (var t of (tabs.data.items || [])) {
     if (t.name === nameV2 || t.name.startsWith('v2-' + m1)) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
   }
@@ -212,18 +212,25 @@ async function syncData() {
       written++;
 
       if (batch.length >= 500) {
+        var ok = false;
         try {
           var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch });
-          if (cr.code !== 0) console.error('[质检B] batch_create返回:', JSON.stringify(cr).substring(0,200));
+          ok = (cr.code === 0);
+          if (!ok) console.error('[质检B] batch_create返回:', JSON.stringify(cr).substring(0,200));
         } catch(e) { console.error('[质检B] batch_create异常:', e.message); }
-        try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); }
+        if (ok) { try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); } }
         console.log('[质检B] 已写入', written, '/', total);
         batch = []; ids = [];
       }
     }
     if (batch.length) {
-      try { await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch }); } catch(e) { console.error('[质检B] 最后批次异常:', e.message); }
-      try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); }
+      var ok2 = false;
+      try {
+        var cr2 = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${tblId}/records/batch_create`, { records: batch });
+        ok2 = (cr2.code === 0);
+        if (!ok2) console.error('[质检B] 最后批次返回:', JSON.stringify(cr2).substring(0,200));
+      } catch(e) { console.error('[质检B] 最后批次异常:', e.message); }
+      if (ok2) { try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); } }
     }
     if (written) console.log('[质检B] 同步完成:', written, '/', total);
   } catch(e) {
