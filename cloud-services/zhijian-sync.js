@@ -88,18 +88,24 @@ function getWeekKey(d) {
 async function getOrCreateWeeklyTable(token) {
   var now = new Date(), key = getWeekKey(now);
   var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables?page_size=50`);
-  for (var t of (tabs.data.items || [])) {
-    var day = now.getDay();
-    var monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-    var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-    var m1 = monday.getFullYear() + '年' + (monday.getMonth() + 1) + '月' + monday.getDate();
-    if (t.name.includes(m1)) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
-  }
+  var day = now.getDay();
+  var monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  var m1 = monday.getFullYear() + '年' + (monday.getMonth() + 1) + '月' + monday.getDate();
   var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
-  var name = m1 + '-' + m2;
-  console.log('[质检B] 创建新周表:', name);
+  var nameV2 = 'v2-' + m1 + '-' + m2;
+  for (var t of (tabs.data.items || [])) {
+    if (t.name === nameV2 || t.name.startsWith('v2-' + m1)) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
+  }
+  // 删除同周旧版表(无v2前缀)
+  for (var t2 of (tabs.data.items || [])) {
+    if (t2.name.includes(m1) && !t2.name.startsWith('v2-')) {
+      try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${t2.table_id}`); console.log('[质检B] 删除旧版周表:', t2.name); } catch(e) {}
+    }
+  }
+  console.log('[质检B] 创建新周表:', nameV2);
   var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables`,
-    { table: { name: name, fields: TABLE_FIELDS } });
+    { table: { name: nameV2, fields: TABLE_FIELDS } });
   var id = cr.data ? cr.data.table_id : '';
   if (!id) console.error('[质检B] 创建周表失败:', JSON.stringify(cr).substring(0,200));
   return id || CONFIG.tableId;
