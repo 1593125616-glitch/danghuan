@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.78
+// @version      0.79
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
@@ -714,16 +714,18 @@
         if (!shouldCheckUpdate() || typeof GM_xmlhttpRequest === 'undefined') return;
         GM_xmlhttpRequest({
             method: 'GET', url: YB_SCRIPT_URL,
-            onload: (resp) => {
-                const m = resp.responseText.match(/@version\s+(\S+)/);
-                if (!m) return;
+            onload: function(resp) {
+                var m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) { markCheckDone(); return; }
                 if (isNewerVer(m[1], GM_info.script.version)) {
                     log('检测到新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
                     window.location.href = YB_SCRIPT_URL;
                 } else {
                     markCheckDone();
                 }
-            }
+            },
+            onerror: function() { markCheckDone(); },
+            ontimeout: function() { markCheckDone(); }
         });
     }
 

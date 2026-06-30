@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      3.4
+// @version      3.5
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -385,18 +385,23 @@
 
     function checkUpdate() {
         if (!shouldCheck(A_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
+        console.log('[质检A] 检查更新...');
         GM_xmlhttpRequest({
             method: 'GET', url: A_URL,
-            onload: (resp) => {
-                const m = resp.responseText.match(/@version\s+(\S+)/);
-                if (!m) return;
+            onload: function(resp) {
+                var m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) { markDone(A_CK_KEY); return; }
+                console.log('[质检A] 远程版本:', m[1], '本地版本:', GM_info.script.version);
                 if (isNewerVer(m[1], GM_info.script.version)) {
                     console.warn('[质检A] 发现新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
                     window.location.href = A_URL;
                 } else {
                     markDone(A_CK_KEY);
+                    console.log('[质检A] 已是最新版本');
                 }
-            }
+            },
+            onerror: function() { markDone(A_CK_KEY); },
+            ontimeout: function() { markDone(A_CK_KEY); }
         });
     }
     checkUpdate();

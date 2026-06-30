@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.94
+// @version      1.7.95
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -2766,16 +2766,18 @@
         if (!shouldCheck(SUK_CK_KEY) || typeof GM_xmlhttpRequest === 'undefined') return;
         GM_xmlhttpRequest({
             method: 'GET', url: SUK_URL,
-            onload: (resp) => {
-                const m = resp.responseText.match(/@version\s+(\S+)/);
-                if (!m) return;
+            onload: function(resp) {
+                var m = resp.responseText.match(/@version\s+(\S+)/);
+                if (!m) { markDone(SUK_CK_KEY); return; }
                 if (isNewerVer(m[1], GM_info.script.version)) {
                     console.warn('[质检] 发现新版本 ' + m[1] + '（当前 ' + GM_info.script.version + '），自动更新');
                     window.location.href = SUK_URL;
                 } else {
                     markDone(SUK_CK_KEY);
                 }
-            }
+            },
+            onerror: function() { markDone(SUK_CK_KEY); },
+            ontimeout: function() { markDone(SUK_CK_KEY); }
         });
     }
     checkSukUpdate();
