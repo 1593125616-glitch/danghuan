@@ -396,11 +396,11 @@ async function computeLocalRank() {
   };
 }
 const RANK_TABLE_FIELDS = [
-  {"field_name":"平均时效","type":1},
-  {"field_name":"间隔时间","type":1}, {"field_name":"平均每台","type":1},
   {"field_name":"全检","type":1}, {"field_name":"SKU","type":1},
   {"field_name":"功能","type":1}, {"field_name":"拆修","type":1},
-  {"field_name":"外观","type":1}
+  {"field_name":"外观","type":1},
+  {"field_name":"平均时效","type":1}, {"field_name":"间隔时间","type":1},
+  {"field_name":"平均每台","type":1}
 ];
 let rankCache = {}; // { key: tableId }
 
@@ -448,14 +448,14 @@ async function writeRankTable(token, tblId, label, inspectors) {
   if (!inspectors.length) return;
 
   var categories = [
-    { field: '平均时效', sort: function(a,b){ return a.avgInterval - b.avgInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgInterval); } },
-    { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
-    { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
     { field: '全检', stepKey: 'qj', addSite: true },
     { field: 'SKU', stepKey: 'sku', addSite: true },
     { field: '功能', stepKey: 'gn', addSite: true },
     { field: '拆修', stepKey: 'cx', addSite: true },
-    { field: '外观', stepKey: 'wg', addSite: true }
+    { field: '外观', stepKey: 'wg', addSite: true },
+    { field: '平均时效', sort: function(a,b){ return a.avgInterval - b.avgInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgInterval); } },
+    { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
+    { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } }
   ];
 
   // Pre-sort each category
