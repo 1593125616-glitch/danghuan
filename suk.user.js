@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.95
+// @version      1.7.96
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1116,111 +1116,6 @@
                     if (!selected || /不检测|跳过/i.test(selected)) return null;
                     if (selected !== expected) {
                         return `连接 应为【${expected}】，你选了【${selected}】`;
-                    }
-                    return null;
-                },
-            },
-            {
-                name: '内存',
-                labelKeywords: ['内存'],
-                conditionalCheck: (officialText) => {
-                    const brand = getInputValueByLabel('品牌');
-                    const category = getInputValueByLabel('品类');
-                    if (!/华为|荣耀/i.test(brand) || !(category === '笔记本' || category === '电脑')) return null;
-                    const src = extractField(officialText, '容量') || extractField(officialText, '产品描述');
-                    if (!src) return null;
-                    const m = src.match(/(\d+)\s*G(?:B)?\s*\+/i);
-                    if (!m) return null;
-                    const value = parseInt(m[1]);
-                    const options = getAvailableOptions('内存');
-                    if (!options.length) return null;
-                    let expected = '';
-                    const exact = options.find(o => {
-                        const n = parseInt(o);
-                        return !isNaN(n) && n === value;
-                    });
-                    if (exact) {
-                        expected = exact;
-                    } else {
-                        const range = options.find(o => {
-                            const p = o.match(/(\d+)\s*G(?:B)?\s*-\s*(\d+)\s*G(?:B)?/i);
-                            return p && value >= parseInt(p[1]) && value <= parseInt(p[2]);
-                        });
-                        if (range) expected = range;
-                    }
-                    if (!expected) return null;
-                    const selected = getSelectedValue(['内存']);
-                    if (!selected || /不检测|跳过/i.test(selected)) return null;
-                    if (selected !== expected) {
-                        return `内存 应为【${expected}】（${m[0]}），你选了【${selected}】`;
-                    }
-                    return null;
-                },
-            },
-            {
-                name: '固态硬盘',
-                labelKeywords: ['固态硬盘'],
-                conditionalCheck: (officialText) => {
-                    const brand = getInputValueByLabel('品牌');
-                    const category = getInputValueByLabel('品类');
-                    if (!/华为|荣耀/i.test(brand) || !(category === '笔记本' || category === '电脑')) return null;
-                    const src = extractField(officialText, '容量') || extractField(officialText, '产品描述');
-                    if (!src) return null;
-                    const m = src.match(/\+\s*(\d+)\s*(G(?:B)?|T(?:B)?)/i);
-                    if (!m) return null;
-                    const value = parseInt(m[1]);
-                    const rawUnit = m[2].toUpperCase().replace(/^G$/, 'GB').replace(/^T$/, 'TB');
-                    const valueGB = rawUnit.startsWith('T') ? value * 1024 : value;
-                    const options = getAvailableOptions('固态硬盘');
-                    if (!options.length) return null;
-                    const selected = getSelectedValue(['固态硬盘']);
-                    if (!selected || /不检测|跳过/i.test(selected)) return null;
-                    if (/不含固态硬盘/.test(selected)) return null;
-                    let expected = '';
-                    const exact = options.find(o => {
-                        const n = o.match(/(?:固态硬盘)?\s*(\d+)\s*(?:G(?:B)?|T(?:B)?)/i);
-                        return n && parseInt(n[1]) === value && (o.includes('固态硬盘') || !o.includes('-'));
-                    });
-                    if (exact) {
-                        expected = exact;
-                    } else {
-                        const range = options.find(o => {
-                            const p = o.match(/固态硬盘\s*(\d+)\s*G(?:B)?\s*-\s*(\d+)\s*G(?:B)?/i);
-                            if (!p) {
-                                const pt = o.match(/固态硬盘\s*([\d.]+)\s*T(?:B)?\s*-\s*([\d.]+)\s*T(?:B)?/i);
-                                if (pt) {
-                                    const minTB = parseFloat(pt[1]) * 1024;
-                                    const maxTB = parseFloat(pt[2]) * 1024;
-                                    return valueGB >= minTB && valueGB <= maxTB;
-                                }
-                                return false;
-                            }
-                            return valueGB >= parseInt(p[1]) && valueGB <= parseInt(p[2]);
-                        });
-                        if (range) expected = range;
-                    }
-                    if (!expected) return null;
-                    if (selected !== expected) {
-                        return `固态硬盘 应为【${expected}】（${m[0]}），你选了【${selected}】`;
-                    }
-                    return null;
-                },
-            },
-            {
-                name: '显卡',
-                labelKeywords: ['显卡'],
-                conditionalCheck: (officialText) => {
-                    const brand = getInputValueByLabel('品牌');
-                    const category = getInputValueByLabel('品类');
-                    if (!/华为|荣耀/i.test(brand) || !(category === '笔记本' || category === '电脑')) return null;
-                    const desc = extractField(officialText, '产品描述');
-                    if (!desc || !/集显|集成显卡/i.test(desc)) return null;
-                    const selected = getSelectedValue(['显卡']);
-                    if (!selected || /不检测|跳过/i.test(selected)) return null;
-                    // 过滤显卡功能状态类选项（功能正常/功能异常），非显卡类型选择
-                    if (/功能正常|功能异常|异常|良好|检测/i.test(selected)) return null;
-                    if (selected !== '核芯/集成显卡') {
-                        return `显卡 应为【核芯/集成显卡】（产品描述含集显），你选了【${selected}】`;
                     }
                     return null;
                 },
