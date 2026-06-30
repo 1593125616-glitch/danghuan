@@ -274,7 +274,7 @@ async function computeLocalRank() {
           var step2 = rec.step || '';
           var m3 = step2.match(/(\d+)\/(\d+)/);
           if (!m3 || parseInt(m3[2]) !== 4) {
-            if (ct && st && (st - ct) < 120000) continue;
+            if (ct && st && (ct - st) < 120000) continue;
           }
         }
 
