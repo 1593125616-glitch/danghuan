@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      2.0.2
+// @version      2.0.3
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -61,7 +61,7 @@
         const newSelections = {};
         allSelects.forEach(function(selectEl) {
             const input = selectEl.querySelector('.el-input__inner');
-            if (input && input.value.trim() !== '') {
+            if (input && input.value.trim() !== '' && input.value.trim() !== '全部' && input.value.trim() !== '请选择') {
                 const label = getSelectLabel(selectEl);
                 newSelections[label] = input.value.trim();
             }
@@ -1500,7 +1500,13 @@
         for (const l of ls) {
             if (l.textContent.trim() === lbl) {
                 const inp = l.nextElementSibling?.querySelector('.el-input__inner');
-                return inp ? inp.value.trim() : '';
+                var v = inp ? inp.value.trim() : '';
+                if (v === '全部' || v === '请选择') v = '';
+                if (!v) {
+                    var tag = l.nextElementSibling?.querySelector('.el-tag');
+                    if (tag) v = tag.textContent.trim();
+                }
+                return v;
             }
         }
         return '';
