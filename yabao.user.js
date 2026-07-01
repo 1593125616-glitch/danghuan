@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         啞寶查詢自動生成報告 (延遲調整)
 // @namespace    https://www.ybcheck.com/
-// @version      0.79
+// @version      0.82
 // @description  優化複製按鈕點擊延遲為500ms；OPPO格式化；VIVO自動提取複製
 // @author       py1998
 // @match        https://www.ybcheck.com/*
 // @match        https://www.57306.com/*
 // @match        https://support.oppo.com/*
 // @match        https://support.vivo.com.cn/*
+// @match        https://repair.dji.com/*
+// @match        http://repair.dji.com/*
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -731,4 +733,97 @@
 
     checkYbUpdate();
     setInterval(checkYbUpdate, YB_CHECK_INTERVAL);
+
+    // ========== DJI 大疆查询 ==========
+    if (/repair\.dji\.com/.test(location.host)) {
+        console.log('[DJI] 脚本已加载, URL:', location.href);
+        var djDone = false;
+        var djTimer = null;
+        var djObserver = null;
+        var djInterval = null;
+
+        function tryCopyDJI() {
+            if (djDone) return;
+            var title = document.querySelector('h1.device-title') || document.querySelector('.device-data h1');
+            if (!title) { var allH1 = document.querySelectorAll('h1'); for (var hi=0;hi<allH1.length;hi++) { if (/设备信息/.test(allH1[hi].textContent)) { title = allH1[hi]; break; } } }
+            if (!title) return;
+            var details = document.querySelector('.details-info') || document.querySelector('.device-data') || document.querySelector('.device-data ul');
+            if (!details) return;
+            var allText = details.textContent;
+            if (!allText || allText.length < 20) return;
+
+            djDone = true;
+            console.log('[DJI] 检测到查询结果,开始提取');
+            var modelEl = details.querySelector('.line-name, li.line-name');
+            var model = modelEl ? modelEl.textContent.trim() : '';
+            if (!model) { var mm = allText.match(/DJI\s+\S+/); if (mm) model = mm[0]; }
+            var snEl = details.querySelector('.line-numb, li.line-numb');
+            var sn = snEl ? snEl.textContent.trim() : '';
+            if (!sn) { var sm = allText.match(/序列号[：:]\s*(\S+)/); if (sm) sn = sm[1]; }
+            sn = sn.replace(/^序列号[：:]\s*/, '');
+            var timeEl = details.querySelector('.line-time, li.line-time');
+            var timeText = timeEl ? timeEl.textContent.trim() : '';
+            if (!timeText) { var tm = allText.match(/激活时间[：:]\s*(\S+)/); if (tm) timeText = '激活时间：' + tm[1]; }
+            var w1 = allText.match(/状态\s*(\S+)/);
+            var w2 = allText.match(/预计截止日期\s*(\S+)/);
+            var repairMatch = allText.match(/维修或服务记录\s*[：:\s]*(\S+)/); var repair = repairMatch ? repairMatch[1].trim() : '';
+            var flyawayMatch = allText.match(/飞丢申报记录\s*[：:\s]*(\S+)/); var flyaway = flyawayMatch ? flyawayMatch[1].trim() : '';
+
+            var result = [];
+            if (model) result.push('型号:' + model);
+            if (sn) result.push('序列号：' + sn);
+            if (timeText) result.push(timeText);
+            if (w1) result.push('保修期：' + w1[1]);
+            if (w2) result.push('预计截止日期：' + w2[1]);
+            if (repair) result.push('维修或服务记录：' + repair);
+            if (flyaway) result.push('飞丢申报记录：' + flyaway);
+
+            // DJI Care 随心换
+            if (/DJI Care|随心换/.test(allText)) {
+                var careIdx = allText.indexOf('DJI Care');
+                if (careIdx === -1) careIdx = allText.indexOf('随心换');
+                var careText = careIdx >= 0 ? allText.substring(careIdx) : '';
+                var carePeriod = careText.match(/服务有效期\s*(\S+\s*-\s*\S+)/);
+                var careTimes = careText.match(/剩余置换次数\s*(\S+)/);
+                var careStatus = careText.match(/状态\s*(\S+)/);
+                result.push('DJI Care 随心换');
+                if (carePeriod) result.push('服务有效期' + carePeriod[1]);
+                if (careTimes) result.push('剩余置换次数：' + careTimes[1]);
+                if (careStatus) result.push('随心换状态：' + careStatus[1]);
+            }
+
+            var output = result.join('\n');
+            console.log('[DJI] 提取结果:', output);
+            if (output && typeof GM_setClipboard !== 'undefined') {
+                GM_setClipboard(output, 'text');
+                console.log('[DJI] 已复制到剪贴板');
+            }
+            stopDJI();
+        }
+
+        function startDJI() {
+            if (djTimer) return;
+            console.log('[DJI] 开始监测,3分钟后自动停止');
+            djObserver = new MutationObserver(function() { tryCopyDJI(); });
+            djObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+            djInterval = setInterval(tryCopyDJI, 2000);
+            djTimer = setTimeout(function() { console.log('[DJI] 3分钟到,停止监测'); stopDJI(); }, 3 * 60 * 1000);
+        }
+
+        function stopDJI() {
+            if (djObserver) { djObserver.disconnect(); djObserver = null; }
+            if (djInterval) { clearInterval(djInterval); djInterval = null; }
+            if (djTimer) { clearTimeout(djTimer); djTimer = null; }
+        }
+
+        // 监听查询按钮点击,开始23分钟监测
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('button');
+            if (!btn) return;
+            if (/查询|搜索/.test(btn.textContent)) {
+                console.log('[DJI] 检测到查询按钮点击,启动监测');
+                setTimeout(startDJI, 1000);
+            }
+        });
+    }
 })();

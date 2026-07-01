@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.2
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -650,6 +650,10 @@
                 labelKeywords: ['保修状态', '保修', '是否在保', '保修时长', '保修剩余'],
                 customCheck: (officialText, selectedVal) => {
                     const datePatterns = [
+                        // DJI 格式
+                        { regex: /预计截止日期[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+                        { regex: /激活时间[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
+                        // 通用格式
                         { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
                         { regex: /预估保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
                         { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
@@ -744,12 +748,22 @@
                     }
 
                     let expectedInterval = '';
-                    if (diffDays < 30) expectedInterval = '保修时长<30天';
-                    else if (diffDays < 110) expectedInterval = '30天≤保修时长<110天';
-                    else if (diffDays < 190) expectedInterval = '110天≤保修时长<190天';
-                    else if (diffDays < 250) expectedInterval = '190天≤保修时长<250天';
-                    else if (diffDays < 330) expectedInterval = '250天≤保修时长<330天';
-                    else expectedInterval = '保修时长≥330天';
+                    // 大疆 运动相机/无人机 专用区间
+                    var brand2 = getInputValueByLabel('品牌');
+                    var category2 = getInputValueByLabel('品类');
+                    if (/大疆|DJI/i.test(brand2) && /运动相机|无人机/.test(category2)) {
+                        if (diffDays < 30) expectedInterval = '保修时长<30天或过保';
+                        else if (diffDays < 180) expectedInterval = '30天≤保修时长<180天';
+                        else if (diffDays < 330) expectedInterval = '180天≤保修时长<330天';
+                        else expectedInterval = '保修时长≥330天';
+                    } else {
+                        if (diffDays < 30) expectedInterval = '保修时长<30天';
+                        else if (diffDays < 110) expectedInterval = '30天≤保修时长<110天';
+                        else if (diffDays < 190) expectedInterval = '110天≤保修时长<190天';
+                        else if (diffDays < 250) expectedInterval = '190天≤保修时长<250天';
+                        else if (diffDays < 330) expectedInterval = '250天≤保修时长<330天';
+                        else expectedInterval = '保修时长≥330天';
+                    }
 
                     if (selectedVal !== expectedInterval)
                         return `保修状态 应为【${expectedInterval}】（剩余${diffDays}天），你选了【${selectedVal}】`;
@@ -1306,6 +1320,70 @@
                     return null;
                 },
             },
+            {
+                // 大疆 拆修情况
+                name: '拆修',
+                labelKeywords: ['拆修情况', '拆修', '维修情况'],
+                conditionalCheck: (officialText) => {
+                    var brand = getInputValueByLabel('品牌');
+                    var category = getInputValueByLabel('品类');
+                    if (!/大疆|DJI/i.test(brand) || !/运动相机|无人机/.test(category)) return null;
+                    var repairMatch = officialText.match(/维修或服务记录[：:]\s*(有|无)/);
+                    if (!repairMatch || repairMatch[1] !== '有') return null;
+                    var selected = getSelectedValue(['拆修情况', '拆修', '维修情况']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+                    if (selected !== '有官方售后记录') {
+                        return `拆修情况 应为【有官方售后记录】（维修记录:有），你选了【${selected}】`;
+                    }
+                    return null;
+                },
+            },
+            {
+                // 大疆 DJI Care 随心换服务
+                name: 'DJI Care',
+                labelKeywords: ['DJICare随心换服务', 'DJI Care', '随心换', 'DJICare'],
+                conditionalCheck: (officialText) => {
+                    var brand = getInputValueByLabel('品牌');
+                    var category = getInputValueByLabel('品类');
+                    if (!/大疆|DJI/i.test(brand) || !/运动相机|无人机/.test(category)) return null;
+                    var careIdx = officialText.indexOf('DJI Care');
+                    if (careIdx === -1) careIdx = officialText.indexOf('随心换');
+                    if (careIdx === -1) return null;
+                    var careText = officialText.substring(careIdx);
+
+                    var statusMatch = careText.match(/随心换状态[：:]\s*(\S+)/);
+                    var timesMatch = careText.match(/剩余置换次数[：:]\s*(\d+)/);
+                    var periodMatch = careText.match(/服务有效期(\S+)\s*-\s*(\S+)/);
+                    if (!timesMatch) timesMatch = careText.match(/剩余置换次数\s*(\d+)/);
+
+                    var selected = getSelectedValue(['DJICare随心换服务', 'DJI Care', '随心换', 'DJICare']);
+                    if (!selected || /不检测|跳过/i.test(selected)) return null;
+
+                    var status = statusMatch ? statusMatch[1] : '';
+                    var times = timesMatch ? parseInt(timesMatch[1]) : 0;
+
+                    if (/已过期|过保/.test(status) || times === 0) {
+                        if (selected !== 'DJI Care 服务过保 或 随心换次数为0' && selected.indexOf('过保') === -1) {
+                            return 'DJICare随心换服务 应为【DJI Care 服务过保 或 随心换次数为0】你选了【' + selected + '】';
+                        }
+                        return null;
+                    }
+
+                    if (periodMatch && times > 0) {
+                        var endDate = parseDateLocal(periodMatch[2].replace(/\//g, '-'));
+                        var today = new Date(); today.setHours(0,0,0,0);
+                        var days = Math.ceil((endDate - today) / (1000*60*60*24));
+                        var expected = '';
+                        if (days < 180) expected = 'DJI Care 服务在保6个月内 （随心换次数≥1）';
+                        else if (days < 365) expected = 'DJI Care 服务在保6-12个月 （随心换次数≥1）';
+                        else expected = 'DJI Care 服务存在保≥12个月 （随心换次数≥1）';
+                        if (selected !== expected) {
+                            return 'DJICare随心换服务 应为【' + expected + '】（剩余'+days+'天），你选了【' + selected + '】';
+                        }
+                    }
+                    return null;
+                },
+            },
         ],
         bannerStyle: `position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:99999; background:#d93025; color:#fff; padding:11px 16px; font-size:14px; font-weight:bold; text-align:center; border-radius:0 0 6px 6px; box-shadow:0 2px 8px rgba(0,0,0,0.3); white-space:nowrap;`,
         minOfficialLength: 30,
@@ -1696,6 +1774,8 @@
             retryCount = 0;
             // 先自动勾选Y线保修，等DOM更新后再执行对比
             autoCheckWarrantyForYLine(clipboardOfficialText);
+            autoCheckDJICare(clipboardOfficialText);
+            autoCheckDJIRepair(clipboardOfficialText);
             autoSelectFields(clipboardOfficialText, true);
             setTimeout(() => check(true), 200);
             showTemporaryMessage('✅ 已读取剪贴板信息，正在对比');
@@ -1766,17 +1846,29 @@
         document.querySelectorAll('.suk-no-anomaly').forEach(el => el.remove());
     }
 
+    function getMatchingOption(optTexts, keywords) {
+        for (var i = 0; i < keywords.length; i++) {
+            for (var j = 0; j < optTexts.length; j++) {
+                if (optTexts[j].indexOf(keywords[i]) !== -1) return optTexts[j];
+            }
+        }
+        return '';
+    }
+
     // ==================== Y线自动勾选保修时长 ====================
     function autoCheckWarrantyForYLine(sourceText) {
         const brand = getInputValueByLabel('品牌');
         if (!brand) return;
+        const category = getInputValueByLabel('品类') || '';
+        const isDJI = /大疆|DJI/i.test(brand) && /运动相机|无人机/.test(category);
         const detLine = getInputValueByLabel('检测线');
-        if (!detLine || detLine.trim() !== 'Y线') return;
+        if (!isDJI && (!detLine || detLine.trim() !== 'Y线')) return;
 
         // 获取保修结束日期/激活日期
         const officialSrc = sourceText || clipboardOfficialText || getPageText() || '';
         if (!officialSrc) return;
         const datePatterns = [
+            { regex: /预计截止日期[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
             { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
             { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
             { regex: /保修截止日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
@@ -1790,11 +1882,21 @@
         }
 
         if (!endDate || isNaN(endDate)) {
-            const actMatch = officialSrc.match(/激活(?:日期|时间)[：:]\s*(?:已于\s*)?(\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2})/i);
-            if (actMatch) {
-                let actStr = actMatch[1].replace(/年/g,'-').replace(/月/g,'-').replace(/日/g,'').replace(/\//g,'-');
-                endDate = parseDateLocal(actStr);
-                if (endDate) endDate.setFullYear(endDate.getFullYear() + 1);
+            // DJI: 预计截止日期待更新时,用激活时间+1年
+            if (isDJI) {
+                var djiAct = officialSrc.match(/激活时间[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i);
+                if (djiAct) {
+                    endDate = parseDateLocal(djiAct[1].replace(/\//g, '-'));
+                    if (endDate) endDate.setFullYear(endDate.getFullYear() + 1);
+                }
+            }
+            if (!endDate || isNaN(endDate)) {
+                const actMatch = officialSrc.match(/激活(?:日期|时间)[：:]\s*(?:已于\s*)?(\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2})/i);
+                if (actMatch) {
+                    let actStr = actMatch[1].replace(/年/g,'-').replace(/月/g,'-').replace(/日/g,'').replace(/\//g,'-');
+                    endDate = parseDateLocal(actStr);
+                    if (endDate) endDate.setFullYear(endDate.getFullYear() + 1);
+                }
             }
         }
 
@@ -1829,6 +1931,14 @@
                     }
                 }
 
+                // 大疆 运动相机/无人机 专用区间
+                if (!expectedText && /大疆|DJI/i.test(brand) && /运动相机|无人机/.test(getInputValueByLabel('品类'))) {
+                    if (diffDays < 30) expectedText = getMatchingOption(optTexts, ['<30天或过保', '保修时长<30天或过保']);
+                    else if (diffDays < 180) expectedText = getMatchingOption(optTexts, ['<180', '30天≤保修时长<180天']);
+                    else if (diffDays < 330) expectedText = getMatchingOption(optTexts, ['<330', '180天≤保修时长<330天']);
+                    else expectedText = getMatchingOption(optTexts, ['≥330', '保修时长≥330天']);
+                }
+
                 if (!expectedText && diffDays < 30) {
                     const match = optTexts.find(t => t.includes('<30') || t.includes('小于30') || t.includes('30天以内'));
                     if (match) expectedText = match;
@@ -1860,6 +1970,93 @@
                         if (parent && !parent.classList.contains('is-active')) {
                             opt.click();
                             console.log('[Y线] 自动勾选:', expectedText);
+                        }
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // ==================== DJI Care 随心换自动勾选 ====================
+    function autoCheckDJICare(sourceText) {
+        var brand = getInputValueByLabel('品牌');
+        var category = getInputValueByLabel('品类');
+        if (!/大疆|DJI/i.test(brand) || !/运动相机|无人机/.test(category)) return;
+        var officialSrc = sourceText || clipboardOfficialText || getPageText() || '';
+        if (!officialSrc) return;
+        var careIdx = officialSrc.indexOf('DJI Care');
+        if (careIdx === -1) careIdx = officialSrc.indexOf('随心换');
+        if (careIdx === -1) return;
+        var careText = officialSrc.substring(careIdx);
+
+        var statusMatch = careText.match(/随心换状态[：:]\s*(\S+)/);
+        var timesMatch = careText.match(/剩余置换次数[：:]\s*(\d+)/);
+        if (!timesMatch) timesMatch = careText.match(/剩余置换次数\s*(\d+)/);
+        var periodMatch = careText.match(/服务有效期(\S+)\s*-\s*(\S+)/);
+
+        var status = statusMatch ? statusMatch[1] : '';
+        var times = timesMatch ? parseInt(timesMatch[1]) : 0;
+        var expectedText = '';
+
+        if (/已过期|过保/.test(status) || times === 0) {
+            expectedText = 'DJI Care 服务过保 或 随心换次数为0';
+        } else if (periodMatch && times > 0) {
+            var endDate = parseDateLocal(periodMatch[2].replace(/\//g, '-'));
+            var today = new Date(); today.setHours(0,0,0,0);
+            var days = Math.ceil((endDate - today) / (1000*60*60*24));
+            if (days < 180) expectedText = 'DJI Care 服务在保6个月内 （随心换次数≥1）';
+            else if (days < 365) expectedText = 'DJI Care 服务在保6-12个月 （随心换次数≥1）';
+            else expectedText = 'DJI Care 服务存在保≥12个月 （随心换次数≥1）';
+        }
+        if (!expectedText) return;
+
+        var allLabels = document.querySelectorAll('.el-form-item__label');
+        for (var li = 0; li < allLabels.length; li++) {
+            var text2 = allLabels[li].textContent.trim();
+            if (/DJICare|随心换|DJI Care/i.test(text2)) {
+                var content2 = allLabels[li].nextElementSibling;
+                if (!content2) continue;
+                var options2 = content2.querySelectorAll('.el-radio-button__inner');
+                for (var oi = 0; oi < options2.length; oi++) {
+                    if (options2[oi].textContent.trim() === expectedText) {
+                        var parent2 = options2[oi].closest('.el-radio-button');
+                        if (parent2 && !parent2.classList.contains('is-active')) {
+                            options2[oi].click();
+                            console.log('[DJI Care] 自动勾选:', expectedText);
+                        }
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // ==================== DJI 拆修自动勾选 ====================
+    function autoCheckDJIRepair(sourceText) {
+        var brand = getInputValueByLabel('品牌');
+        var category = getInputValueByLabel('品类');
+        if (!/大疆|DJI/i.test(brand) || !/运动相机|无人机/.test(category)) return;
+        var officialSrc = sourceText || clipboardOfficialText || getPageText() || '';
+        if (!officialSrc) return;
+        var repairMatch = officialSrc.match(/维修或服务记录[：:]\s*(有)/);
+        if (!repairMatch) return;
+        var allLabels = document.querySelectorAll('.el-form-item__label');
+        for (var li = 0; li < allLabels.length; li++) {
+            var text2 = allLabels[li].textContent.trim();
+            if (/拆修情况|拆修|维修情况/.test(text2)) {
+                var content2 = allLabels[li].nextElementSibling;
+                if (!content2) continue;
+                var options2 = content2.querySelectorAll('.el-radio-button__inner');
+                for (var oi = 0; oi < options2.length; oi++) {
+                    var txt = options2[oi].textContent.trim();
+                    if (txt === '有官方售后记录' || txt.indexOf('官方售后') !== -1) {
+                        var parent2 = options2[oi].closest('.el-radio-button');
+                        if (parent2 && !parent2.classList.contains('is-active')) {
+                            options2[oi].click();
+                            console.log('[DJI 拆修] 自动勾选:', txt);
                         }
                         return;
                     }

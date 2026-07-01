@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.61
+// @version      1.2.62
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -548,7 +548,7 @@
                     if (!selectedVal) return null;
                     const brand = getInputValueByLabel('品牌');
                     const category = getInputValueByLabel('品类') || '';
-                    const originalSelectedVal = selectedVal;
+                    let originalSelectedVal = selectedVal;
                     selectedVal = cleanSelectedModel(selectedVal, brand, category);
 
                     let officialModelClean = null;
@@ -598,6 +598,12 @@
                             if (/苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                                 raw = cleanAppleAirPodsModel(raw);
                             }
+                            // 大疆 运动相机/无人机: 去除大疆/DJI前缀
+                            if (/大疆|DJI/i.test(brand) && (category === '运动相机' || category === '无人机')) {
+                                raw = raw.replace(/^(大疆|DJI)\s*/i, '').trim();
+                                selectedVal = selectedVal.replace(/^(大疆|DJI)\s*/i, '').trim();
+                                originalSelectedVal = originalSelectedVal.replace(/^(大疆|DJI)\s*/i, '').trim();
+                            }
                             raw = removeColorAndStorage(raw, color, storage);
                             if (!color || !storage) {
                                 const extracted = extractColorAndStorage(officialText);
@@ -629,6 +635,12 @@
                         }
                         if (officialModelClean && /苹果|Apple/i.test(brand) && (category === '耳机' || category === '耳機' || category === '音频设备' || category === '音频')) {
                             officialModelClean = cleanAppleAirPodsModel(officialModelClean);
+                        }
+                        // 大疆 运动相机/无人机: 去除大疆/DJI前缀
+                        if (officialModelClean && /大疆|DJI/i.test(brand) && (category === '运动相机' || category === '无人机')) {
+                            officialModelClean = officialModelClean.replace(/^(大疆|DJI)\s*/i, '').trim();
+                            selectedVal = selectedVal.replace(/^(大疆|DJI)\s*/i, '').trim();
+                            originalSelectedVal = originalSelectedVal.replace(/^(大疆|DJI)\s*/i, '').trim();
                         }
                     }
 
