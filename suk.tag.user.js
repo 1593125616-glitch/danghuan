@@ -3008,29 +3008,41 @@
             if (Date.now() - _sukUploadLock < 3000) return;
             _sukUploadLock = Date.now();
             var barcode = getBarcode();
-            var data = {
-                barcode: barcode,
-                userName: getUserInfo(),
-                category: getInputValueByLabel('品类'),
-                brand: getInputValueByLabel('品牌'),
-                model: getInputValueByLabel('机型'),
-                detectionLine: getDetectionLine(),
-                step: getStepInfo(),
-                machineType: getMachineType(),
-                selections: getAllSelections(),
-                submitTime: barcodeTimeMap[barcode] || getTimestamp()
-            };
-            if (data.barcode && data.userName) {
-                console.log('[质检] 提交, 扫码时间:', barcodeTimeMap[barcode] || '无记录,用当前时间');
-                if (data.detectionLine === 'K线') {
-                    var bodyText = document.body.textContent || '';
-                    if (/物品30天内在库质检报告/.test(bodyText) && /保修机/.test(bodyText)) return;
+            // 强制刷新下拉框缓存,延迟读取确保Vue渲染完成
+            if (typeof syncAllSelects === 'function') syncAllSelects();
+
+            function doUpload() {
+                var data = {
+                    barcode: barcode,
+                    userName: getUserInfo(),
+                    category: getInputValueByLabel('品类'),
+                    brand: getInputValueByLabel('品牌'),
+                    model: getInputValueByLabel('机型'),
+                    detectionLine: getDetectionLine(),
+                    step: getStepInfo(),
+                    machineType: getMachineType(),
+                    selections: getAllSelections(),
+                    submitTime: barcodeTimeMap[barcode] || getTimestamp()
+                };
+                if (data.barcode && data.userName) {
+                    console.log('[质检] 提交, 扫码时间:', barcodeTimeMap[barcode] || '无记录,用当前时间');
+                    if (data.detectionLine === 'K线') {
+                        var bodyText = document.body.textContent || '';
+                        if (/物品30天内在库质检报告/.test(bodyText) && /保修机/.test(bodyText)) return;
+                    }
+                    var thisKey = data.barcode + '|' + data.step + '|' + data.userName;
+                    if (thisKey === lastUploadedKey) { lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode]; return; }
+                    lastUploadedKey = thisKey;
+                    uploadToCloud(data);
+                    lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
                 }
-                var thisKey = data.barcode + '|' + data.step + '|' + data.userName;
-                if (thisKey === lastUploadedKey) { lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode]; return; }
-                lastUploadedKey = thisKey;
-                uploadToCloud(data);
-                lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
+            }
+
+            var cat = getInputValueByLabel('品类');
+            if (!cat || cat === '全部' || cat === '请选择') {
+                setTimeout(doUpload, 300);
+            } else {
+                doUpload();
             }
         }
     });
