@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检中心-提交后自动上传
 // @namespace    http://tampermonkey.net/
-// @version      4.0
+// @version      4.1
 // @description  点击提交后自动上传物品条码+账号+时间到腾讯云
 // @author       Kun
 // @match        https://yihuan.oppoer.me/*
@@ -416,7 +416,7 @@
 
     function fetchRank() {
         var myName = (document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/) || [])[1] || '';
-        if (!myName) return;
+        if (!myName || !/潘瑶/.test(myName)) return;
         GM_xmlhttpRequest({
             method: 'GET',
             url: CLOUD_FN_URL + '/rank',
