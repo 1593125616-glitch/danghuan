@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      1.7.96
+// @version      2.0.0
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      cdn.jsdelivr.net
+// @connect      zhijian-d7gqnvecce55e0e0e-1445087380.ap-shanghai.app.tcloudbase.com
 // @updateURL    https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/1593125616-glitch/danghuan@main/suk.user.js
 // ==/UserScript==
@@ -2677,4 +2678,275 @@
     }
     checkSukUpdate();
     setInterval(checkSukUpdate, SUK_CK_INTERVAL);
+
+    // ========== 质检上传模块(从质检A合并) ==========
+    var CLOUD_FN_URL = 'https://zhijian-d7gqnvecce55e0e0e-1445087380.ap-shanghai.app.tcloudbase.com/zhijian';
+    var barcodeTimeMap = {};
+    var lastBarcode = '';
+    var lastUploadedKey = '';
+
+    function uploadToCloud(data) {
+        console.log('[质检上传] 数据:', JSON.stringify(data));
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CLOUD_FN_URL + '/submit',
+            data: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+            onload: function(resp) {
+                if (resp.status === 200) {
+                    try { var r = JSON.parse(resp.responseText); if (r.code === 0) { console.log('[质检上传] 成功'); } else { console.error('[质检上传] 失败:', r.message); } } catch(e) {}
+                }
+            },
+            onerror: function() { console.error('[质检上传] 网络错误'); }
+        });
+    }
+
+    function getBarcode() {
+        var inp = document.querySelector('input[placeholder="请输入物品条码"]');
+        if (inp && inp.value.trim()) return inp.value.trim();
+        var items = document.querySelectorAll('.el-form-item');
+        for (var i = 0; i < items.length; i++) {
+            var lbl = items[i].querySelector('.el-form-item__label');
+            if (lbl && lbl.textContent.trim() === '物品条码') {
+                var in2 = items[i].querySelector('input');
+                if (in2 && in2.value.trim()) return in2.value.trim();
+            }
+        }
+        return '';
+    }
+
+    function getUserInfo() {
+        var m = document.cookie.match(/(?:^|;\s*)p_name=([^;]*)/);
+        if (m) return decodeURIComponent(m[1]);
+        var ue = document.querySelector('.el-dropdown-link');
+        if (ue) return ue.textContent.trim();
+        return '';
+    }
+
+    function getDetectionLine() {
+        return getInputValueByLabel('检测线');
+    }
+
+    function getStepInfo() {
+        var spans = document.querySelectorAll('span');
+        for (var i = 0; i < spans.length; i++) {
+            if (spans[i].textContent.trim().indexOf('当前步骤') === 0) {
+                var next = spans[i+1];
+                if (next) {
+                    var t = next.textContent.trim();
+                    var m = t.match(/^(.+?\d+\/\d+)/);
+                    if (m) return m[1].trim();
+                    return t;
+                }
+            }
+        }
+        return '';
+    }
+
+    function getMachineType() {
+        var tags = document.querySelectorAll('.goods-source');
+        if (!tags.length) return '';
+        var types = [];
+        for (var i = 0; i < tags.length; i++) { var t = tags[i].textContent.trim(); if (t) types.push(t); }
+        return types.join(',');
+    }
+
+    function getAllSelections() {
+        var labels = document.querySelectorAll('.el-form-item__label');
+        var pairs = [];
+        var skipLabels = ['检测线', '物品条码', '品类', '品牌', '机型'];
+        for (var i = 0; i < labels.length; i++) {
+            var text = labels[i].textContent.trim();
+            if (!text) continue;
+            if (skipLabels.indexOf(text) !== -1) continue;
+            var content = labels[i].nextElementSibling;
+            if (!content) continue;
+            var active = content.querySelector('.el-radio-button.is-active .el-radio-button__inner');
+            if (!active) active = content.querySelector('.el-radio.is-checked .el-radio__label');
+            var val = '';
+            if (active) { var span = active.querySelector('span'); val = span ? span.textContent.trim() : active.textContent.trim(); }
+            if (!val) { var inp = content.querySelector('.el-input__inner'); if (inp && inp.value && inp.value !== '请选择') val = inp.value.trim(); }
+            if (!val) { var tag = content.querySelector('.el-tag'); if (tag) val = tag.textContent.trim(); }
+            if (val) pairs.push(text + ':' + val);
+        }
+        return pairs.join('\n');
+    }
+
+    function getTimestamp() {
+        var now = new Date();
+        var pad = function(n) { return String(n).padStart(2,'0'); };
+        return now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+    }
+
+    function recordBarcodeTime(barcode) {
+        var now = new Date();
+        var pad = function(n) { return String(n).padStart(2,'0'); };
+        var ts = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+        barcodeTimeMap[barcode] = ts;
+        console.log('[质检] 扫码:', barcode, ts);
+    }
+
+    // 轮询检测条码变化
+    setInterval(function() {
+        var inp = document.querySelector('input[placeholder="请输入物品条码"]');
+        if (!inp) return;
+        var v = inp.value.trim();
+        if (v && v !== lastBarcode) { lastBarcode = v; recordBarcodeTime(v); }
+        else if (!v && lastBarcode) { lastBarcode = ''; }
+    }, 500);
+
+    // 提交拦截
+    var _sukUploadLock = 0;
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('button');
+        if (!btn) return;
+        var btnText = btn.textContent.trim();
+        if (btnText === '提交' || btnText === '提 交') {
+            if (Date.now() - _sukUploadLock < 3000) return;
+            _sukUploadLock = Date.now();
+            var barcode = getBarcode();
+            var data = {
+                barcode: barcode,
+                userName: getUserInfo(),
+                category: getInputValueByLabel('品类'),
+                brand: getInputValueByLabel('品牌'),
+                model: getInputValueByLabel('机型'),
+                detectionLine: getDetectionLine(),
+                step: getStepInfo(),
+                machineType: getMachineType(),
+                selections: getAllSelections(),
+                submitTime: barcodeTimeMap[barcode] || getTimestamp()
+            };
+            if (data.barcode && data.userName) {
+                console.log('[质检] 提交, 扫码时间:', barcodeTimeMap[barcode] || '无记录,用当前时间');
+                if (data.detectionLine === 'K线') {
+                    var bodyText = document.body.textContent || '';
+                    if (/物品30天内在库质检报告/.test(bodyText) && /保修机/.test(bodyText)) return;
+                }
+                var thisKey = data.barcode + '|' + data.step + '|' + data.userName;
+                if (thisKey === lastUploadedKey) { lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode]; return; }
+                lastUploadedKey = thisKey;
+                uploadToCloud(data);
+                lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
+            }
+        }
+    });
+
+    // ========== 质检排名面板(仅潘瑶) ==========
+    var myUserName = getUserInfo();
+    if (/潘瑶/.test(myUserName)) {
+        function showRankPanel(data, myInspector) {
+            var PANEL_ID = 'qc_rank_panel';
+            if (!document.getElementById('qc_rank_style')) {
+                var s2 = document.createElement('style'); s2.id = 'qc_rank_style';
+                s2.textContent = '#'+PANEL_ID+'{position:fixed;top:60px;right:10px;z-index:99998;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.15);font-size:12px;user-select:none;min-width:220px;max-height:80vh;overflow-y:auto;}'+
+                '#'+PANEL_ID+' .rh{padding:6px 10px;background:#007aff;color:#fff;border-radius:8px 8px 0 0;font-weight:bold;cursor:move;display:flex;justify-content:space-between;}'+
+                '#'+PANEL_ID+' .rcb{font-size:11px;cursor:pointer;}'+
+                '#'+PANEL_ID+' .rb{padding:4px 0;}'+
+                '#'+PANEL_ID+' .rs{padding:2px 10px;font-weight:bold;color:#999;font-size:11px;border-bottom:1px solid #eee;}'+
+                '#'+PANEL_ID+' .rr{display:flex;align-items:center;padding:2px 10px;border-bottom:1px solid #f5f5f5;font-size:11px;}'+
+                '#'+PANEL_ID+' .rk{min-width:24px;font-weight:bold;text-align:left;}'+
+                '#'+PANEL_ID+' .rn{flex:1;}'+
+                '#'+PANEL_ID+'.fold .rb{display:none;}'+
+                '#'+PANEL_ID+'.fold .rs{display:none;}'+
+                '#'+PANEL_ID+'.fold .rr{display:none;}'+
+                '#'+PANEL_ID+'.fold .rh_fold{display:block;}'+
+                '#'+PANEL_ID+' .rh_fold{display:none;padding:3px 10px;border-bottom:1px solid #eee;font-size:11px;}'+
+                '#'+PANEL_ID+' .rh_top{color:#666;font-size:10px;}'+
+                '#'+PANEL_ID+' .rc3{display:inline-block;min-width:68px;}';
+                document.head.appendChild(s2);
+            }
+            var el = document.getElementById(PANEL_ID);
+            if (!el) { el = document.createElement('div'); el.id = PANEL_ID; document.body.appendChild(el); }
+            var dragging = false, ox = 0, oy = 0;
+            el.onmousedown = function(e2) { if(e2.target.closest('.rcb,.rh_fold,.rb'))return; dragging=true; ox=e2.clientX-el.offsetLeft; oy=e2.clientY-el.offsetTop; };
+            document.onmousemove = function(e2) { if(dragging){el.style.left=(e2.clientX-ox)+'px';el.style.top=(e2.clientY-oy)+'px';el.style.right='auto';}};
+            document.onmouseup = function() { dragging=false; };
+
+            var inspectors = data.inspectors || [];
+            var stepLabels = ['qj','sku','gn','cx','wg'];
+
+            var stepRanks = {};
+            var siteTopN = { '深圳-沙井': 3 };
+            function getTopN(site) { return siteTopN[site] || 2; }
+            for (var si = 0; si < stepLabels.length; si++) {
+                var key = stepLabels[si];
+                var bySite = {};
+                for (var ii = 0; ii < inspectors.length; ii++) {
+                    var s = inspectors[ii].site || '未知';
+                    if (!bySite[s]) bySite[s] = [];
+                    bySite[s].push(inspectors[ii]);
+                }
+                var ranked = [];
+                var siteNames = Object.keys(bySite).sort();
+                for (var sn = 0; sn < siteNames.length; sn++) {
+                    var site = siteNames[sn];
+                    var topN = getTopN(site);
+                    var sorted = bySite[site].slice().sort(function(a,b){ return (b[key]||0) - (a[key]||0); });
+                    ranked = ranked.concat(sorted.slice(0, topN));
+                }
+                stepRanks[key] = ranked;
+            }
+
+            var self = null, selfToday = null;
+            for (var i2 = 0; i2 < inspectors.length; i2++) { if (inspectors[i2].inspector === myInspector) { self = inspectors[i2]; break; } }
+            var todayList = data.today || [];
+            for (var j2 = 0; j2 < todayList.length; j2++) { if (todayList[j2].inspector === myInspector) { selfToday = todayList[j2]; break; } }
+
+            function stepStr(s3) { return '全检'+(s3.qj||0)+'台 SKU'+(s3.sku||0)+'台 功能'+(s3.gn||0)+'台 拆修'+(s3.cx||0)+'台 外观'+(s3.wg||0)+'台'; }
+
+            var html = '<div class="rh" title="拖动移动"><span>'+(selfToday?stepStr(selfToday):'今日质检数量')+'</span><span class="rcb">折叠</span></div>';
+            html += '<div class="rh_fold"><span class="rh_top">昨日: '+(self?stepStr(self):'')+'</span></div>';
+            html += '<div class="rb"><div class="rs">昨日排名</div>';
+            if (self) {
+                html += '<div class="rr"><span class="rk">自己</span><span class="rn">';
+                html += '<span class="rc3">全检'+(self.qj||0)+'台</span><span class="rc3">SKU'+(self.sku||0)+'台</span><span class="rc3">功能'+(self.gn||0)+'台</span><span class="rc3">拆修'+(self.cx||0)+'台</span><span class="rc3">外观'+(self.wg||0)+'台</span>';
+                html += '</span></div>';
+            }
+            var maxRows = 0;
+            for (var si2 = 0; si2 < stepLabels.length; si2++) { maxRows = Math.max(maxRows, stepRanks[stepLabels[si2]].length); }
+            for (var r = 0; r < maxRows; r++) {
+                html += '<div class="rr"><span class="rk">'+(r+1)+'</span><span class="rn">';
+                for (var c3 = 0; c3 < stepLabels.length; c3++) {
+                    var p2 = stepRanks[stepLabels[c3]][r];
+                    html += '<span class="rc3">'+(p2 ? p2.inspector+' '+(p2[stepLabels[c3]]||0) : '-')+'</span>';
+                }
+                html += '</span></div>';
+            }
+            html += '</div>';
+            el.innerHTML = html;
+            if (GM_getValue('qc_rank_fold', false)) el.classList.add('fold');
+            setTimeout(function() {
+                var fcb = el.querySelector('.rcb');
+                if (fcb) fcb.onclick = function() { el.classList.toggle('fold'); GM_setValue('qc_rank_fold', el.classList.contains('fold')); };
+                var fed = el.querySelector('.rh_fold');
+                if (fed) fed.onclick = function() { el.classList.remove('fold'); GM_setValue('qc_rank_fold', false); };
+            }, 50);
+        }
+
+        function fetchRank() {
+            var parts = myUserName.split('-');
+            var myInspector = parts.length >= 2 ? parts[1] : '';
+            if (myInspector.includes('+')) myInspector = myInspector.split('+').pop();
+            GM_xmlhttpRequest({
+                method: 'GET', url: CLOUD_FN_URL + '/rank',
+                onload: function(resp) {
+                    try {
+                        var r = JSON.parse(resp.responseText);
+                        if (r.code === 0 && r.data) { showRankPanel(r.data, myInspector); }
+                    } catch(e) {}
+                }
+            });
+        }
+
+        function scheduleNextFetch() {
+            var now = new Date();
+            var h = now.getHours();
+            if (h < 8 || h >= 24) return;
+            var next = new Date(now);
+            next.setHours(h+1,0,0,0);
+            setTimeout(function() { fetchRank(); scheduleNextFetch(); }, next - now);
+        }
+        setTimeout(function() { fetchRank(); scheduleNextFetch(); }, 5000);
+    }
 })();
