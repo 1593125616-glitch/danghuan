@@ -265,12 +265,32 @@ async function syncData() {
       try {
         var dyTblId = await getOrCreateDouyinTable(token);
         if (dyTblId) {
-          for (var di = 0; di < dyBatch.length; di += 500) {
-            var chunk = dyBatch.slice(di, di + 500);
-            var dr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${dyTblId}/records/batch_create`, { records: chunk });
-            if (dr.code !== 0) console.error('[抖音] batch_create返回:', JSON.stringify(dr).substring(0,200));
+          // 读取表中已有条码去重
+          var existingBarcodes = {};
+          var dyPt = '';
+          while (true) {
+            var dyList = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${dyTblId}/records?page_size=500` + (dyPt ? '&page_token=' + dyPt : ''));
+            if (dyList.code !== 0 || !dyList.data || !dyList.data.items || !dyList.data.items.length) break;
+            for (var ri = 0; ri < dyList.data.items.length; ri++) {
+              var bc = dyList.data.items[ri].fields['物品条码'];
+              if (bc) existingBarcodes[bc] = true;
+            }
+            if (!dyList.data.has_more) break; else dyPt = dyList.data.page_token;
           }
-          console.log('[抖音] 已写入:', dyBatch.length, '条');
+          // 过滤已存在的
+          var newBatch = [];
+          for (var di = 0; di < dyBatch.length; di++) {
+            var dyBarcode = dyBatch[di].fields['物品条码'];
+            if (!dyBarcode || !existingBarcodes[dyBarcode]) newBatch.push(dyBatch[di]);
+          }
+          if (newBatch.length) {
+            for (var di2 = 0; di2 < newBatch.length; di2 += 500) {
+              var chunk = newBatch.slice(di2, di2 + 500);
+              var dr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${dyTblId}/records/batch_create`, { records: chunk });
+              if (dr.code !== 0) console.error('[抖音] batch_create返回:', JSON.stringify(dr).substring(0,200));
+            }
+            console.log('[抖音] 新写入:', newBatch.length, '条');
+          }
         }
       } catch(e) { console.error('[抖音] 写入异常:', e.message); }
     }
