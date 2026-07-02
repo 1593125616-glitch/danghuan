@@ -650,10 +650,7 @@
                 labelKeywords: ['保修状态', '保修', '是否在保', '保修时长', '保修剩余'],
                 customCheck: (officialText, selectedVal) => {
                     const datePatterns = [
-                        // DJI 格式
                         { regex: /预计截止日期[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
-                        { regex: /激活时间[：:]\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
-                        // 通用格式
                         { regex: /保修到期时间[：:]\s*([\s\S]+?)(?:\r?\n|$)/i, handler: (m) => m[1].trim() },
                         { regex: /预估保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
                         { regex: /保修结束日期[：:]\s*(?:<[^>]+>)?(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/i, handler: (m) => m[1] },
