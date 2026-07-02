@@ -38,14 +38,23 @@ function parseUserName(userName) {
   var inspector = '';
   var site = '';
 
-  // 查找包含"质检"的段，提取质检后面的名字
+  // 查找包含"质检"或拉丁字母前缀的段(如 L汪宇宏)
   var qcIdx = -1;
   for (var i = 1; i < parts.length; i++) {
     if (parts[i].indexOf('质检') !== -1) {
       inspector = parts[i].replace(/^.*?质检/, '');
-      if (inspector.includes('+')) inspector = inspector.split('+').pop();
       qcIdx = i;
       break;
+    }
+  }
+  // 未找到质检,尝试找字母前缀+中文的段(如 L汪宇宏)
+  if (qcIdx === -1) {
+    for (var i2 = 1; i2 < parts.length; i2++) {
+      if (/[A-Za-z]+.*[\u4e00-\u9fff]/.test(parts[i2]) && parts[i2].length >= 2 && parts[i2].length < 10) {
+        inspector = parts[i2].replace(/^[A-Za-z]+/, '');
+        qcIdx = i2;
+        break;
+      }
     }
   }
 
@@ -294,6 +303,16 @@ async function computeLocalRank() {
         if (name.includes('+')) name = name.split('+').pop();
         qcIdx = i;
         break;
+      }
+    }
+    if (qcIdx === -1) {
+      for (var i2 = 1; i2 < parts.length; i2++) {
+        if (/[A-Za-z]+.*[\u4e00-\u9fff]/.test(parts[i2]) && parts[i2].length >= 2 && parts[i2].length < 10) {
+          name = parts[i2].replace(/^[A-Za-z]+/, '');
+          if (name.includes('+')) name = name.split('+').pop();
+          qcIdx = i2;
+          break;
+        }
       }
     }
 
