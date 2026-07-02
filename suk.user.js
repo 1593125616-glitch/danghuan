@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（全品类+剪贴板+保修区间+渠道规则）
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.1.0
 // @description  颜色、存储容量、购买渠道、保修状态、激活状态、网络制式、型号、激活锁检测
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1493,18 +1493,24 @@
         if ((lbl === '品类' || lbl === '品牌' || lbl === '机型') && window.dropdownSelections && window.dropdownSelections[lbl]) {
             return window.dropdownSelections[lbl].trim();
         }
-        const ls = document.querySelectorAll('.el-form-item__label');
-        for (const l of ls) {
-            if (l.textContent.trim() === lbl) {
-                const inp = l.nextElementSibling?.querySelector('.el-input__inner');
-                var v = inp ? inp.value.trim() : '';
-                if (v === '全部' || v === '请选择') v = '';
-                if (!v) {
-                    var tag = l.nextElementSibling?.querySelector('.el-tag');
-                    if (tag) v = tag.textContent.trim();
-                }
-                return v;
+        var formItems = document.querySelectorAll('.el-form-item');
+        for (var i = 0; i < formItems.length; i++) {
+            var labelEl = formItems[i].querySelector('.el-form-item__label');
+            if (!labelEl || labelEl.textContent.trim() !== lbl) continue;
+            // 优先从Vue实例读selected.label(始终稳定)
+            var selectEl = formItems[i].querySelector('.el-select');
+            if (selectEl && selectEl.__vue__) {
+                var vm = selectEl.__vue__;
+                if (vm.selected && vm.selected.label) return vm.selected.label;
+                if (vm.currentPlaceholder && vm.currentPlaceholder !== '请选择' && vm.currentPlaceholder !== '全部') return vm.currentPlaceholder;
             }
+            // 回退DOM
+            var inp2 = formItems[i].querySelector('.el-input__inner');
+            var v2 = inp2 ? inp2.value.trim() : '';
+            if (v2 && v2 !== '请选择' && v2 !== '全部') return v2;
+            var tag2 = formItems[i].querySelector('.el-tag');
+            if (tag2) return tag2.textContent.trim();
+            return v2;
         }
         return '';
     }
@@ -2778,6 +2784,10 @@
             hideNoAnomalyMessage();
             acknowledgedErrors = [];
             lastAutoSelectText = null;
+            var nbErrs = [];
+            recheckNBCache(nbErrs);
+            showNotebookErrors(nbErrs);
+            clearNBCache();
             document.querySelectorAll('.suk-auto-badge').forEach(el => el.remove());
             retryCount = 0;
             console.log('[质检高亮] 已清空对比数据，等待新查询结果');
@@ -2812,11 +2822,310 @@
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         addClipboardButton();
+        // addNotebookDataButton(); // TODO: 测试完再启用
     } else {
-        window.addEventListener('DOMContentLoaded', addClipboardButton);
+        window.addEventListener('DOMContentLoaded', function() { addClipboardButton(); /* addNotebookDataButton(); */ });
     }
 
     check(true);
+
+    // ==================== 笔记本读取数据库对比 ====================
+    var _sukNBCache = {};
+
+    function addNotebookDataButton() {
+        var btn = document.createElement('button');
+        btn.textContent = '💻 读取数据';
+        btn.style.cssText = 'position:fixed; top:5.5cm; right:10px; z-index:100000; height:1.3cm; min-width:2.5cm; padding:0 0.2cm; background:#007aff; color:#fff; border:none; border-radius:0.3cm; cursor:pointer; font-size:0.3cm; line-height:1.3cm; box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;';
+        btn.id = 'suk-nb-btn';
+        document.body.appendChild(btn);
+
+        btn.onclick = function() {
+            var imei = getInputValueByLabel('IMEI') || getInputValueByLabel('IMEI号');
+            if (!imei) { showTemporaryMessage('⚠ 未找到IMEI号'); return; }
+            var sn = imei.trim();
+            showTemporaryMessage('⏳ 正在查询数据库...');
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: CLOUD_FN_URL + '/diannao-query?sn=' + encodeURIComponent(sn),
+                onload: function(resp) {
+                    try {
+                        var r = JSON.parse(resp.responseText);
+                        if (r.code !== 0 || !r.data || !r.data.length) {
+                            showTemporaryMessage('⚠ 未找到匹配数据');
+                            return;
+                        }
+                        var record = r.data[0];
+                        parseAndCompareNotebook(record);
+                        showTemporaryMessage('✅ 数据库对比完成');
+                    } catch(e) { showTemporaryMessage('⚠ 解析失败'); }
+                },
+                onerror: function() { showTemporaryMessage('⚠ 网络错误'); }
+            });
+        };
+    }
+
+    function parseAndCompareNotebook(record) {
+        var text = '';
+        for (var k in record) { text += k + record[k] + '\n'; }
+
+        console.log('[笔记本DB] 原始数据:', text.substring(0, 300));
+
+        // 解析内存
+        var memGB = 0;
+        var memMatches = text.match(/(\d+(?:\.\d+)?)\s*GB(?!\s*固|SSD|硬盘|机械|固态)/gi);
+        if (memMatches) {
+            for (var mi = 0; mi < memMatches.length; mi++) {
+                var mv = parseFloat(memMatches[mi]);
+                if (mv >= 1 && mv <= 64) memGB += mv;
+            }
+        }
+        // 也从 "内 存：" 行提取
+        var memLine = text.match(/内\s*存[：:]([\s\S]*?)(?:\n\S|$)/i);
+        if (memLine) {
+            var memVals = memLine[1].match(/(\d+(?:\.\d+)?)\s*GB/gi);
+            if (memVals) {
+                for (var mj = 0; mj < memVals.length; mj++) {
+                    var mmv = parseFloat(memVals[mj]);
+                    if (mmv >= 1 && mmv <= 64) memGB = Math.max(memGB, mmv * (memVals.length > 1 ? 2 : 1));
+                }
+            }
+        }
+        // 重新精确计算: 提取所有内存条容量
+        if (memLine) {
+            memGB = 0;
+            var sticks = memLine[1].match(/(\d+(?:\.\d+)?)\s*GB/gi);
+            if (sticks) {
+                for (var si = 0; si < sticks.length; si++) {
+                    var sv = parseFloat(sticks[si]);
+                    if (sv >= 1 && sv <= 64) memGB += sv;
+                }
+            }
+        }
+
+        // 解析硬盘: 区分 SSD 和 HDD
+        var ssdGB = 0, hddGB = 0;
+        var diskLine = text.match(/硬\s*[盘碟][：:]([\s\S]*?)(?:\n\S|$)/i);
+        if (diskLine) {
+            var diskText = diskLine[1];
+            // 分割多块硬盘
+            var diskParts = diskText.split(/[|｜,，、]/);
+            for (var di = 0; di < diskParts.length; di++) {
+                var dp = diskParts[di].trim();
+                var sizes = dp.match(/(\d+(?:\.\d+)?)\s*(GB|TB)/gi);
+                if (!sizes) continue;
+                var maxSize = 0;
+                for (var ds = 0; ds < sizes.length; ds++) {
+                    var dm = sizes[ds].match(/(\d+(?:\.\d+)?)\s*(GB|TB)/i);
+                    if (dm) { var dg = dm[2].toUpperCase() === 'TB' ? parseFloat(dm[1])*1024 : parseFloat(dm[1]); if (dg > maxSize) maxSize = dg; }
+                }
+                if (/SSD|固态|NVMe|nvme/i.test(dp)) {
+                    ssdGB += maxSize;
+                } else if (/机械|HDD|RPM/i.test(dp)) {
+                    hddGB += maxSize;
+                } else if (dp !== diskParts[0] || !/固态|SSD|NVMe/i.test(diskText)) {
+                    // 模糊判断
+                    if (/固态|SSD|NVMe/i.test(diskText)) ssdGB += maxSize;
+                    else hddGB += maxSize;
+                }
+            }
+        }
+
+        // 解析显卡
+        var gpuLine = text.match(/显\s*卡[：:]([\s\S]*?)(?:\n\S|$)/i);
+        var gpuText = gpuLine ? gpuLine[1] : '';
+        var isIntegrated = /集成|Intel.*HD.*Graphics|Intel.*UHD|核显|基本显示/i.test(gpuText);
+        var isDiscrete = /独立|NVIDIA|GeForce|GTX|RTX|AMD.*Radeon|独显/i.test(gpuText);
+        var gpuModel = '';
+        if (isDiscrete) {
+            var gm = gpuText.match(/GTX\s*\d+|RTX\s*\d+|Radeon.*?\d+|GeForce.*?(?:\d{3,4}|GTX|RTX)/i);
+            if (gm) gpuModel = gm[0].replace(/\s+/g, ' ').trim();
+        }
+
+        console.log('[笔记本DB] 内存:', memGB + 'GB, 固态:', ssdGB + 'GB, 机械:', hddGB + 'GB, 显卡:', gpuText.substring(0, 40));
+
+        // 缓存数据供提交时重新对比
+        _sukNBCache = { memGB: memGB, ssdGB: ssdGB, hddGB: hddGB, gpuText: gpuText, isIntegrated: isIntegrated, isDiscrete: isDiscrete, gpuModel: gpuModel };
+
+        // 立即对比
+        var errs = [];
+        recheckNBCache(errs);
+        showNotebookErrors(errs);
+
+        function recheckNBCache(errs) {
+        if (!_sukNBCache.memGB && !_sukNBCache.ssdGB && !_sukNBCache.hddGB) return;
+        if (_sukNBCache.memGB > 0) compareNotebookField('内存', _sukNBCache.memGB, errs);
+        compareNotebookDisk('固态硬盘', _sukNBCache.ssdGB || 0, errs);
+        compareNotebookDisk('机械硬盘', _sukNBCache.hddGB || 0, errs);
+        compareNotebookGPU(_sukNBCache.gpuText || '', _sukNBCache.isIntegrated, _sukNBCache.isDiscrete, _sukNBCache.gpuModel, errs);
+    }
+
+    function clearNBCache() { _sukNBCache = {}; }
+
+    // 监听笔记本硬件字段变化
+    var _nbLastRecheck = 0;
+    document.addEventListener('click', function(e) {
+        var el = e.target.closest('.el-radio-button__inner, .el-radio__label, .el-select-dropdown__item');
+        if (!el) return;
+        var formItem = el.closest('.el-form-item');
+        if (!formItem) return;
+        var formLabel = formItem.querySelector('.el-form-item__label');
+        if (!formLabel) return;
+        var labelText = formLabel.textContent.trim();
+        if (['内存', '固态硬盘', '机械硬盘', '显卡'].indexOf(labelText) === -1) return;
+        clearTimeout(_nbLastRecheck);
+        _nbLastRecheck = setTimeout(function() {
+            var errs = [];
+            recheckNBCache(errs);
+            showNotebookErrors(errs);
+        }, 400);
+    });
+        for (var ei = 0; ei < errs.length; ei++) {
+            console.log('[笔记本DB] 错误:', errs[ei]);
+        }
+        if (!errs.length) console.log('[笔记本DB] 全部匹配');
+
+        // 显示/清除表单提示
+        showNotebookErrors(errs);
+    }
+
+    function showNotebookErrors(errs) {
+        var fields = ['内存', '固态硬盘', '机械硬盘', '显卡'];
+        for (var fi = 0; fi < fields.length; fi++) {
+            var labels = document.querySelectorAll('.el-form-item__label');
+            for (var li = 0; li < labels.length; li++) {
+                if (labels[li].textContent.trim().indexOf(fields[fi]) === -1) continue;
+                var content = labels[li].nextElementSibling;
+                if (!content) continue;
+                var old = content.querySelector('.suk-nb-tip');
+                if (old) old.remove();
+            }
+        }
+        for (var ei = 0; ei < errs.length; ei++) {
+            var msg = errs[ei];
+            var field = msg.split(':')[0];
+            var labels = document.querySelectorAll('.el-form-item__label');
+            for (var li2 = 0; li2 < labels.length; li2++) {
+                if (labels[li2].textContent.trim().indexOf(field) === -1) continue;
+                var content2 = labels[li2].nextElementSibling;
+                if (!content2) continue;
+                var tip = document.createElement('div');
+                tip.className = 'suk-nb-tip';
+                tip.textContent = '⚠ ' + msg;
+                tip.style.cssText = 'color:#d93025; font-size:14px; font-weight:bold; white-space:nowrap; line-height:1.3; padding:1px 0;';
+                content2.insertBefore(tip, content2.firstChild);
+                break;
+            }
+        }
+    }
+
+    function compareNotebookField(label, sizeGB, errs) {
+        var selected = getSelectedValue([label]);
+        var options = getAvailableOptions(label);
+        if (!options.length) return;
+        if (!selected) return;
+        if (/不含|不检测|跳过/i.test(selected)) { errs.push(label + ': DB有' + sizeGB + 'GB, 你选了' + selected); return; }
+
+        var selGB = 0;
+        var selRng = selected.match(/(\d+(?:\.\d+)?)\s*G[B]?\s*-\s*(\d+(?:\.\d+)?)\s*G[B]?/i);
+        if (selRng) {
+            if (sizeGB < parseInt(selRng[1]) || sizeGB > parseInt(selRng[2])) {
+                errs.push(label + ': DB有' + sizeGB + 'GB, 你选了' + selected);
+            }
+        } else {
+            var selMatch = selected.match(/(\d+(?:\.\d+)?)\s*G[B]?/i);
+            if (selMatch) selGB = parseInt(selMatch[1]);
+            if (selGB > 0 && Math.abs(sizeGB - selGB) > 1 && Math.abs(sizeGB - selGB) / selGB > 0.05) {
+                errs.push(label + ': DB有' + sizeGB + 'GB, 你选了' + selected);
+            }
+        }
+    }
+
+    function compareNotebookDisk(label, sizeGB, errs) {
+        var selected = getSelectedValue([label]);
+        var options = getAvailableOptions(label);
+        if (!options.length) return;
+        if (!selected) return;
+
+        if (sizeGB === 0) {
+            if (!/不含|不检测|跳过/i.test(selected)) {
+                errs.push(label + ': DB无此设备, 你选了' + selected);
+            }
+            return;
+        }
+
+        if (/不含|不检测|跳过/i.test(selected)) {
+            errs.push(label + ': DB有' + (sizeGB>=1024?(sizeGB/1024).toFixed(1)+'TB':sizeGB+'GB') + ', 你选了' + selected);
+            return;
+        }
+
+        var selRng = selected.match(/(\d+(?:\.\d+)?)\s*G[B]?\s*-\s*(\d+(?:\.\d+)?)\s*G[B]?/i);
+        if (!selRng) selRng = selected.match(/([\d.]+)\s*T[B]?\s*-\s*([\d.]+)\s*T[B]?/i);
+        if (selRng) {
+            var lo = parseFloat(selRng[1]), hi = parseFloat(selRng[2]);
+            if (/\d+T/i.test(selected)) { lo *= 1024; hi *= 1024; }
+            if (sizeGB < lo || sizeGB > hi) {
+                var sv = sizeGB >= 1024 ? (sizeGB/1024).toFixed(1)+'TB' : sizeGB+'GB';
+                errs.push(label + ': DB有' + sv + ', 你选了' + selected);
+            }
+        } else {
+            var selMatch = selected.match(/(\d+(?:\.\d+)?)\s*(G|T)[B]?/i);
+            if (selMatch) {
+                var sgb = selMatch[2].toUpperCase() === 'T' ? parseFloat(selMatch[1])*1024 : parseFloat(selMatch[1]);
+                if (Math.abs(sizeGB - sgb) > 1 && Math.abs(sizeGB - sgb) / sgb > 0.05) {
+                    var sv2 = sizeGB >= 1024 ? (sizeGB/1024).toFixed(1)+'TB' : sizeGB+'GB';
+                    errs.push(label + ': DB有' + sv2 + ', 你选了' + selected);
+                }
+            }
+        }
+    }
+
+    function compareNotebookGPU(gpuText, isIntegrated, isDiscrete, gpuModel, errs) {
+        var selected = '';
+        var allLabels = document.querySelectorAll('.el-form-item__label');
+        for (var li = 0; li < allLabels.length; li++) {
+            var t = allLabels[li].textContent.trim();
+            if (t !== '显卡') continue;
+            var content = allLabels[li].nextElementSibling;
+            if (!content) continue;
+            var opts = content.querySelectorAll('.el-radio-button__inner');
+            var hasFunc = false;
+            for (var oi = 0; oi < opts.length; oi++) {
+                if (/功能正常|功能异常/.test(opts[oi].textContent)) { hasFunc = true; break; }
+            }
+            if (hasFunc) continue; // 跳过功能字段
+            var active = content.querySelector('.el-radio-button.is-active .el-radio-button__inner');
+            if (active) selected = getCleanOptionText(active);
+            break;
+        }
+        if (!selected) return;
+
+        if (isDiscrete && gpuModel) {
+            var expected = gpuModel.toUpperCase();
+            if (selected.toUpperCase().indexOf(expected.replace(/\s+/g, '')) === -1 &&
+                selected.toUpperCase().indexOf(gpuModel.replace(/\s/g, '')) === -1) {
+                errs.push('显卡: DB有' + gpuModel + ', 你选了' + selected);
+            }
+            return;
+        }
+
+        if (isDiscrete && !gpuModel) {
+            // 独显无型号, 看显存
+            var vram = gpuText.match(/(\d+(?:\.\d+)?)\s*G\s*(?!Hz|B\s)/i);
+            if (vram) {
+                var vg = parseInt(vram[1]);
+                if (vg >= 6 && selected.indexOf('6G') === -1) errs.push('显卡: DB独显' + vg + 'G, 你选了' + selected);
+                else if (vg >= 2 && vg < 6 && selected.indexOf('2G') === -1) errs.push('显卡: DB独显' + vg + 'G, 你选了' + selected);
+                else if (vg < 2 && selected.indexOf('2G以下') === -1) errs.push('显卡: DB独显' + vg + 'G, 你选了' + selected);
+            }
+            return;
+        }
+
+        if (isIntegrated && !isDiscrete) {
+            if (!/集成|核芯|核显/i.test(selected)) {
+                errs.push('显卡: DB为集成显卡, 你选了' + selected);
+            }
+        }
+    }
 
     let checkTimer = null;
     const obs = new MutationObserver(() => {
@@ -2995,6 +3304,16 @@
         else if (!v && lastBarcode) { lastBarcode = ''; }
     }, 500);
 
+    // 持续记录表单字段(解决Vue渲染延迟)
+    var _sukFormCache = {};
+    setInterval(function() {
+        _sukFormCache.category = getInputValueByLabel('品类');
+        _sukFormCache.brand = getInputValueByLabel('品牌');
+        _sukFormCache.model = getInputValueByLabel('机型');
+        _sukFormCache.detLine = getDetectionLine();
+        _sukFormCache.step = getStepInfo();
+    }, 500);
+
     // 提交拦截
     var _sukUploadLock = 0;
     document.addEventListener('click', function(e) {
@@ -3005,18 +3324,17 @@
             if (Date.now() - _sukUploadLock < 3000) return;
             _sukUploadLock = Date.now();
             var barcode = getBarcode();
-            // 强制刷新下拉框缓存,延迟读取确保Vue渲染完成
             if (typeof syncAllSelects === 'function') syncAllSelects();
 
             function doUpload() {
                 var data = {
                     barcode: barcode,
                     userName: getUserInfo(),
-                    category: getInputValueByLabel('品类'),
-                    brand: getInputValueByLabel('品牌'),
-                    model: getInputValueByLabel('机型'),
-                    detectionLine: getDetectionLine(),
-                    step: getStepInfo(),
+                    category: _sukFormCache.category || getInputValueByLabel('品类'),
+                    brand: _sukFormCache.brand || getInputValueByLabel('品牌'),
+                    model: _sukFormCache.model || getInputValueByLabel('机型'),
+                    detectionLine: _sukFormCache.detLine || getDetectionLine(),
+                    step: _sukFormCache.step || getStepInfo(),
                     machineType: getMachineType(),
                     selections: getAllSelections(),
                     submitTime: barcodeTimeMap[barcode] || getTimestamp()
@@ -3034,13 +3352,7 @@
                     lastBarcode = data.barcode; delete barcodeTimeMap[data.barcode];
                 }
             }
-
-            var cat = getInputValueByLabel('品类');
-            if (!cat || cat === '全部' || cat === '请选择') {
-                setTimeout(doUpload, 300);
-            } else {
-                doUpload();
-            }
+            doUpload();
         }
     });
 
