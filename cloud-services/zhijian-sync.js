@@ -233,8 +233,8 @@ async function syncData() {
       batch.push({ fields });
       ids.push(rec._id);
       written++;
-      // 抖音渠道额外写入
-      if (rec.machineType && /抖音/.test(rec.machineType)) {
+      // 抖音渠道额外写入(仅sku问题项1/1和外观问题项4/4)
+      if (rec.machineType && /抖音/.test(rec.machineType) && /sku问题项1\/1|外观问题项4\/4/.test(rec.step)) {
         dyBatch.push({ fields: Object.assign({}, fields) });
       }
 
