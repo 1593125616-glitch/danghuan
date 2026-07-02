@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         质检选项核对横幅（型号对比专用）
 // @namespace    http://tampermonkey.net/
-// @version      1.2.62
+// @version      1.2.63
 // @description  质检核对：去除查询型号中的 AI版/AI 版 + 修复WiFi版残留版字 + 华为耳机/平板映射
 // @author       py1998
 // @match        https://yihuan.oppoer.me/*
@@ -1337,17 +1337,22 @@
 
     function getInputValueByLabel(lbl) {
         if (lbl === '机型' || lbl === '品牌' || lbl === '品类') {
-            const ls = document.querySelectorAll('.el-form-item__label');
-            for (const l of ls) {
-                if (l.textContent.trim() === lbl) {
-                    const inp = l.nextElementSibling?.querySelector('.el-input__inner');
-                    if (inp) {
-                        let val = inp.value.trim();
-                        if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') {
-                            val = inp.placeholder.trim();
-                        }
-                        if (val && val !== '请选择') return val;
-                    }
+            var formItems = document.querySelectorAll('.el-form-item');
+            for (var fi = 0; fi < formItems.length; fi++) {
+                var labelEl = formItems[fi].querySelector('.el-form-item__label');
+                if (!labelEl || labelEl.textContent.trim() !== lbl) continue;
+                // 优先从Vue实例读selected.label
+                var selectEl = formItems[fi].querySelector('.el-select');
+                if (selectEl && selectEl.__vue__) {
+                    var vm = selectEl.__vue__;
+                    if (vm.selected && vm.selected.label) return vm.selected.label;
+                }
+                // 回退DOM
+                var inp = formItems[fi].querySelector('.el-input__inner');
+                if (inp) {
+                    var val = inp.value.trim();
+                    if ((!val || val === '请选择') && inp.placeholder && inp.placeholder !== '请选择') val = inp.placeholder.trim();
+                    if (val && val !== '请选择') return val;
                 }
             }
             return '';
