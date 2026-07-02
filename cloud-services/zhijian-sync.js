@@ -102,7 +102,7 @@ async function getOrCreateWeeklyTable(token) {
   var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
   var m1 = monday.getFullYear() + '年' + (monday.getMonth() + 1) + '月' + monday.getDate();
   var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
-  var nameV2 = '数据表' + m1.substring(m1.indexOf('年')+1).replace('年','月') + '日-' + m2;
+  var nameV2 = 'v3-' + m1.substring(m1.indexOf('年')+1).replace('年','月') + '日-' + m2;
   for (var t of (tabs.data.items || [])) {
     if (t.name === nameV2 || t.name.startsWith('v2-' + m1)) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
   }
