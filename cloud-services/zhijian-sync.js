@@ -544,9 +544,9 @@ const RANK_TABLE_FIELDS = [
 let rankCache = {}; // { key: tableId }
 
 function fmtSec(sec) {
-  if (!sec || sec <= 0) return '0秒';
+  if (!sec || sec <= 0) return '-';
   var m = Math.floor(sec / 60), s = sec % 60;
-  return m > 0 ? m + '分' + s + '秒' : s + '秒';
+  return m > 0 ? m + '分' + (s ? s + '秒' : '') : s + '秒';
 }
 
 async function ensureRankTable(token, tableName) {
