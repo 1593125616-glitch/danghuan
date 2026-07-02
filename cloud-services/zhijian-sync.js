@@ -29,8 +29,6 @@ let lastCleanup = '';
 try { lastRec = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); console.log('[质检B] 加载缓存:', Object.keys(lastRec).length, '人'); } catch(e) { lastRec = {}; }
 function saveRec() { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(lastRec)); } catch(e) {} }
 
-const TABLE_VERSION = 3;
-
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
 function parseUserName(userName) {
@@ -106,11 +104,7 @@ async function getOrCreateWeeklyTable(token) {
   var m2 = sunday.getMonth() !== monday.getMonth() ? (sunday.getMonth() + 1) + '月' + sunday.getDate() : sunday.getDate();
   var nameV2 = '数据表' + m1.substring(m1.indexOf('年')+1).replace('年','月') + '日-' + m2;
   for (var t of (tabs.data.items || [])) {
-    if (t.name === nameV2) {
-      // 删除旧版表(字段类型不匹配)
-      try { await feishuDelete(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${t.table_id}`); console.log('[质检B] 删除旧版周表:', t.name); } catch(e) {}
-      break;
-    }
+    if (t.name === nameV2) { console.log('[质检B] 使用已有周表:', t.name, t.table_id); return t.table_id; }
   }
   console.log('[质检B] 创建新周表:', nameV2);
   var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables`,
