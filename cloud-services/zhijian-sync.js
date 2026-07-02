@@ -403,7 +403,7 @@ async function computeLocalRank() {
     });
   }
 
-  var MANAGER_BLACKLIST = ['冯琳','陈犁','耿少朋','李滋业','沈力','王航飞','杜鹏','甘冰'];
+  var MANAGER_BLACKLIST = ['冯琳','陈犁','耿少朋','李滋业','沈力','王航飞','杜鹏','甘冰','吴锐'];
 
   function calcStats(data, maxGap) {
     var userMap = {};
