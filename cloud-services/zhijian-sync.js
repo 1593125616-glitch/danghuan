@@ -434,6 +434,9 @@ async function computeLocalRank() {
       }
 
       var intervalSum = 0, totalGapSum = 0, workSum = 0, validCount = 0;
+      // 分步(分母=4)和不分步(分母≠4)分开统计
+      var workSumBundled = 0, workSumUnbundled = 0, validBundled = 0, validUnbundled = 0;
+      var totalGapBundled = 0, totalGapUnbundled = 0;
       var stepCounts = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepTime = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
       var stepInterval = { qj: 0, sku: 0, gn: 0, cx: 0, wg: 0 };
@@ -466,6 +469,9 @@ async function computeLocalRank() {
         }
         stepCounts[sk]++;
         workSum += (ct - st);
+        var isBundled = m2 && parseInt(m2[2]) === 4;
+        if (isBundled) { validBundled++; workSumBundled += (ct - st); }
+        else { validUnbundled++; workSumUnbundled += (ct - st); }
 
         if (lastValidIdx >= 0) {
           var prevRec = ug.records[lastValidIdx];
@@ -481,25 +487,31 @@ async function computeLocalRank() {
               stepInterval[sk] += gap;
             }
             var tg = ct - prevAt;
-            if (tg > 0) totalGapSum += tg;
+            if (tg > 0) {
+              totalGapSum += tg;
+              if (isBundled) totalGapBundled += tg;
+              else totalGapUnbundled += tg;
+            }
           }
         }
 
         lastValidIdx = j;
       }
 
-      // 总间隔平均 = sum / (count-1), 取第2台开始算
-      var avgTotalGap = validCount > 1 ? Math.round(totalGapSum / (validCount - 1) / 1000) : 0;
-      // 平均时效 = 每单(createdAt - submitTime)之和 / 数量
-      var avgInterval = validCount > 0 ? Math.round(workSum / validCount / 1000) : 0;
+      var avgTotalGap = validUnbundled > 1 ? Math.round(totalGapUnbundled / (validUnbundled - 1) / 1000) : 0;
+      var avgTotalGapBundled = validBundled > 1 ? Math.round(totalGapBundled / (validBundled - 1) / 1000) : 0;
+      var avgInterval = validUnbundled > 0 ? Math.round(workSumUnbundled / validUnbundled / 1000) : 0;
+      var avgIntervalBundled = validBundled > 0 ? Math.round(workSumBundled / validBundled / 1000) : 0;
 
       result.push({
         inspector: name,
         site: ug.site,
         count: validCount,
-        totalInterval: Math.round(intervalSum / 1000),   // 间隔时间累计(秒)
-        avgInterval: avgInterval,                           // 平均时效(秒)
-        avgTotalGap: avgTotalGap,                          // 平均每台(秒)
+        totalInterval: Math.round(intervalSum / 1000),
+        avgInterval: avgInterval,
+        avgIntervalBundled: avgIntervalBundled,
+        avgTotalGap: avgTotalGap,
+        avgTotalGapBundled: avgTotalGapBundled,
         steps: { qj: stepCounts.qj, sku: stepCounts.sku, gn: stepCounts.gn, cx: stepCounts.cx, wg: stepCounts.wg },
         stepInt: { qj: Math.round(stepInterval.qj/1000), sku: Math.round(stepInterval.sku/1000), gn: Math.round(stepInterval.gn/1000), cx: Math.round(stepInterval.cx/1000), wg: Math.round(stepInterval.wg/1000) }
       });
@@ -525,8 +537,9 @@ const RANK_TABLE_FIELDS = [
   {"field_name":"全检","type":1}, {"field_name":"SKU","type":1},
   {"field_name":"功能","type":1}, {"field_name":"拆修","type":1},
   {"field_name":"外观","type":1},
-  {"field_name":"平均时效","type":1}, {"field_name":"间隔时间","type":1},
-  {"field_name":"平均每台","type":1}
+  {"field_name":"平均时效","type":1}, {"field_name":"分步平均时效","type":1},
+  {"field_name":"间隔时间","type":1},
+  {"field_name":"平均每台","type":1}, {"field_name":"分步平均每台","type":1}
 ];
 let rankCache = {}; // { key: tableId }
 
@@ -580,8 +593,10 @@ async function writeRankTable(token, tblId, label, inspectors) {
     { field: '拆修', stepKey: 'cx', addSite: true },
     { field: '外观', stepKey: 'wg', addSite: true },
     { field: '平均时效', sort: function(a,b){ return a.avgInterval - b.avgInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgInterval); } },
+    { field: '分步平均时效', sort: function(a,b){ return (a.avgIntervalBundled||0) - (b.avgIntervalBundled||0); }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgIntervalBundled||0); } },
     { field: '间隔时间', sort: function(a,b){ return b.totalInterval - a.totalInterval; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.totalInterval); } },
-    { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } }
+    { field: '平均每台', sort: function(a,b){ return a.avgTotalGap - b.avgTotalGap; }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGap); } },
+    { field: '分步平均每台', sort: function(a,b){ return (a.avgTotalGapBundled||0) - (b.avgTotalGapBundled||0); }, format: function(p){ return (p.site||'') + p.inspector + ' ' + fmtSec(p.avgTotalGapBundled||0); } }
   ];
 
   // Pre-sort each category
