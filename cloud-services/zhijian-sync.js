@@ -208,9 +208,9 @@ async function syncData() {
       var fields = {};
       if (rec.barcode) fields['物品条码'] = rec.barcode;
       if (rec.detectionLine) fields['检测线'] = rec.detectionLine;
-      fields['品类'] = rec.category || '';
-      if (rec.brand) fields['品牌'] = rec.brand;
-      if (rec.model) fields['机型'] = rec.model;
+      fields['品类'] = String(rec.category || '');
+      if (rec.brand) fields['品牌'] = String(rec.brand);
+      if (rec.model) fields['机型'] = String(rec.model);
       if (rec.machineType) fields['渠道'] = rec.machineType;
       if (user.jobNo) fields['工号'] = user.jobNo;
       if (user.inspector) fields['质检人'] = user.inspector;
