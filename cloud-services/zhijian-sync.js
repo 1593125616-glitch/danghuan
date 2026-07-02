@@ -120,6 +120,21 @@ async function getOrCreateWeeklyTable(token) {
   return id || CONFIG.tableId;
 }
 
+var douyinTableId = null;
+async function getOrCreateDouyinTable(token) {
+  if (douyinTableId) return douyinTableId;
+  var tabs = await feishuGet(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables?page_size=50`);
+  for (var t of (tabs.data.items || [])) {
+    if (t.name === '抖音') { douyinTableId = t.table_id; console.log('[抖音] 已有表:', t.table_id); return t.table_id; }
+  }
+  console.log('[抖音] 创建新表');
+  var cr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables`,
+    { table: { name: '抖音', fields: TABLE_FIELDS } });
+  douyinTableId = cr.data ? cr.data.table_id : '';
+  if (!douyinTableId) console.error('[抖音] 创建表失败:', JSON.stringify(cr).substring(0,200));
+  return douyinTableId;
+}
+
 function parseCreatedAt(r) {
   if (!r.createdAt) return 0;
   var v = r.createdAt;
@@ -186,12 +201,11 @@ async function syncData() {
     var total = records.data.length;
     console.log('[质检B] 待同步:', total, '条');
 
-    var batch = [], ids = [], written = 0;
+    var batch = [], ids = [], dyBatch = [], written = 0;
     for (var rec of records.data) {
       var user = parseUserName(rec.userName);
       var createdAt = parseCreatedAt(rec);
       var submitTime = parseSubmitTime(rec);
-      if (written < 6) console.log('[质检B] 记录', written, 'createdAt:', createdAt, 'submitTime:', submitTime, 'interval:', interval, 'efficiency:', efficiency, 'user:', user.inspector);
       var inspTime = (createdAt && submitTime) ? fmtDiff(createdAt - submitTime) : '';
       var interval = (rec._interval > 0) ? fmtDiff(rec._interval) : '';
       var efficiency = (rec._efficiency > 0) ? fmtDiff(rec._efficiency) : '';
@@ -219,6 +233,10 @@ async function syncData() {
       batch.push({ fields });
       ids.push(rec._id);
       written++;
+      // 抖音渠道额外写入
+      if (rec.machineType && /抖音/.test(rec.machineType)) {
+        dyBatch.push({ fields: Object.assign({}, fields) });
+      }
 
       if (batch.length >= 500) {
         var ok = false;
@@ -242,6 +260,20 @@ async function syncData() {
       if (ok2) { try { await cloudPost('/mark-pushed', { ids: ids }); } catch(e) { console.error('[质检B] mark-pushed异常:', e.message); } }
     }
     if (written) console.log('[质检B] 同步完成:', written, '/', total);
+    // 抖音渠道额外写入
+    if (dyBatch.length) {
+      try {
+        var dyTblId = await getOrCreateDouyinTable(token);
+        if (dyTblId) {
+          for (var di = 0; di < dyBatch.length; di += 500) {
+            var chunk = dyBatch.slice(di, di + 500);
+            var dr = await feishuPost(`https://open.feishu.cn/open-apis/bitable/v1/apps/${CONFIG.appToken}/tables/${dyTblId}/records/batch_create`, { records: chunk });
+            if (dr.code !== 0) console.error('[抖音] batch_create返回:', JSON.stringify(dr).substring(0,200));
+          }
+          console.log('[抖音] 已写入:', dyBatch.length, '条');
+        }
+      } catch(e) { console.error('[抖音] 写入异常:', e.message); }
+    }
   } catch(e) {
     console.error('[质检B] 同步异常:', e.message, e.stack ? e.stack.substring(0,200) : '');
   }
